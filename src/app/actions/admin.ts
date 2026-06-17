@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { sendTelegramNotification } from '@/lib/telegram'
 
 async function verifyAdminOrStaff() {
   const cookieClient = await createClient()
@@ -29,6 +30,29 @@ async function verifyAdminOrStaff() {
   return { user, role: roleData.role, branchId: roleData.branch_id }
 }
 
+
+async function autoDeliverReadyOrders(supabase: ReturnType<typeof createServiceClient>, branchId: string) {
+  const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString()
+  const { data: readyOrders } = await supabase
+    .from('orders')
+    .select('id')
+    .eq('branch_id', branchId)
+    .eq('status', 'ready')
+    .lt('updated_at', threeMinutesAgo)
+
+  if (!readyOrders?.length) return
+
+  const orderIds = readyOrders.map((o: any) => o.id)
+  await supabase
+    .from('orders')
+    .update({ status: 'delivered', updated_at: new Date().toISOString() })
+    .in('id', orderIds)
+  await supabase
+    .from('order_items')
+    .update({ status: 'delivered' })
+    .in('order_id', orderIds)
+    .neq('status', 'delivered')
+}
 
 export async function setupWebhook(appUrl: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN
@@ -170,6 +194,8 @@ export async function fetchUnifiedDashboardData(branchId: string) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
 
+  await autoDeliverReadyOrders(supabase, branchId)
+
   // 1. Fetch all tables
   const { data: tables } = await supabase
     .from('tables')
@@ -235,13 +261,37 @@ export async function updateOrderStatusAction(orderId: string, status: string) {
 
   const { error } = await supabase
     .from('orders')
-    .update({ 
-      status,
-      updated_at: new Date().toISOString()
-    })
+    .update({ status, updated_at: new Date().toISOString() })
     .eq('id', orderId)
 
   if (error) return { success: false, error: error.message }
+
+  if (status === 'preparing') {
+    await supabase.from('order_items').update({ status: 'preparing' }).eq('order_id', orderId).eq('status', 'pending')
+  } else if (status === 'ready') {
+    await supabase.from('order_items').update({ status: 'ready' }).eq('order_id', orderId).in('status', ['pending', 'preparing'])
+
+    const { data: order } = await supabase
+      .from('orders')
+      .select('tables(name), branches(name), table_sessions(customer_name)')
+      .eq('id', orderId)
+      .single()
+
+    if (order) {
+      const msg =
+`🍽 <b>SİPARİŞ HAZIR — MASAYA GÖTÜR!</b>
+━━━━━━━━━━━━━━━━━
+🏢 <b>Şube:</b> ${(order.branches as any)?.name || 'Şube'}
+🎯 <b>Masa:</b> ${(order.tables as any)?.name || 'Masa'}
+👤 <b>Müşteri:</b> ${(order.table_sessions as any)?.customer_name || 'Müşteri'}
+━━━━━━━━━━━━━━━━━
+✅ Mutfak siparişi hazırladı. Lütfen teslim edin.`
+      sendTelegramNotification(msg).catch(console.error)
+    }
+  } else if (status === 'delivered') {
+    await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', orderId).neq('status', 'delivered')
+  }
+
   return { success: true }
 }
 
@@ -383,4 +433,216 @@ export async function payBillAction(billId: string, amount: number, method: 'cas
   }
 
   return { success: true, isFullyPaid }
+}
+
+// ========== KATEGORİ YÖNETİMİ ==========
+
+export async function fetchCategoriesAction(branchId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('branch_id', branchId)
+    .order('sort_order', { ascending: true })
+  return data || []
+}
+
+export async function createCategoryAction(branchId: string, data: { name_tr: string; name_en?: string; name_ka?: string; name_ru?: string; sort_order?: number }) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { data: created, error } = await supabase
+    .from('categories')
+    .insert({
+      branch_id: branchId,
+      name_tr: data.name_tr,
+      name_ka: data.name_ka || data.name_tr,
+      name_en: data.name_en || data.name_tr,
+      name_ru: data.name_ru || data.name_tr,
+      sort_order: data.sort_order ?? 0,
+      is_active: true,
+    })
+    .select('id')
+    .single()
+  if (error) return { success: false, error: error.message }
+  return { success: true, id: created.id }
+}
+
+export async function updateCategoryAction(categoryId: string, data: { name_tr?: string; name_en?: string; name_ka?: string; name_ru?: string; sort_order?: number; is_active?: boolean }) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { error } = await supabase.from('categories').update(data).eq('id', categoryId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+// ========== ÜRÜN YÖNETİMİ ==========
+
+export async function fetchProductsAction(branchId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+
+  const { data: branch } = await supabase.from('branches').select('brand_id').eq('id', branchId).single()
+  if (!branch) return []
+
+  const { data: products } = await supabase
+    .from('products')
+    .select(`*, categories(id, name_tr), branch_product_settings(custom_price, is_active, stock_count, branch_id)`)
+    .eq('brand_id', branch.brand_id)
+    .order('sort_order', { ascending: true })
+
+  return (products || []).map((p: any) => ({
+    ...p,
+    branch_settings: (p.branch_product_settings || []).find((s: any) => s.branch_id === branchId) ?? null,
+    branch_product_settings: undefined,
+  }))
+}
+
+export async function createProductAction(
+  branchId: string,
+  data: {
+    category_id: string
+    name_tr: string
+    name_en?: string
+    name_ka?: string
+    name_ru?: string
+    description_tr?: string
+    base_price: number
+    prep_time_minutes?: number
+    is_vegetarian?: boolean
+    is_spicy?: boolean
+    allergens?: string[]
+    sort_order?: number
+  }
+) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+
+  const { data: branch } = await supabase.from('branches').select('brand_id').eq('id', branchId).single()
+  if (!branch) return { success: false, error: 'Şube bulunamadı.' }
+
+  const { data: product, error } = await supabase
+    .from('products')
+    .insert({
+      brand_id: branch.brand_id,
+      category_id: data.category_id,
+      name_tr: data.name_tr,
+      name_ka: data.name_ka || data.name_tr,
+      name_en: data.name_en || data.name_tr,
+      name_ru: data.name_ru || data.name_tr,
+      description_tr: data.description_tr || '',
+      description_ka: data.description_tr || '',
+      description_en: data.description_tr || '',
+      description_ru: data.description_tr || '',
+      base_price: data.base_price,
+      prep_time_minutes: data.prep_time_minutes ?? 15,
+      is_vegetarian: data.is_vegetarian ?? false,
+      is_spicy: data.is_spicy ?? false,
+      allergens: data.allergens ?? [],
+      sort_order: data.sort_order ?? 0,
+      is_active: true,
+    })
+    .select('id')
+    .single()
+
+  if (error) return { success: false, error: error.message }
+
+  await supabase.from('branch_product_settings').insert({ branch_id: branchId, product_id: product.id, is_active: true })
+
+  return { success: true, id: product.id }
+}
+
+export async function updateProductAction(
+  productId: string,
+  branchId: string,
+  data: {
+    category_id?: string
+    name_tr?: string
+    name_en?: string
+    name_ka?: string
+    name_ru?: string
+    description_tr?: string
+    base_price?: number
+    prep_time_minutes?: number
+    is_vegetarian?: boolean
+    is_spicy?: boolean
+    allergens?: string[]
+    sort_order?: number
+    is_active?: boolean
+    custom_price?: number | null
+    stock_count?: number | null
+    branch_active?: boolean
+  }
+) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+
+  const { custom_price, stock_count, branch_active, ...productData } = data
+
+  if (Object.keys(productData).length > 0) {
+    const { error } = await supabase.from('products').update(productData).eq('id', productId)
+    if (error) return { success: false, error: error.message }
+  }
+
+  if (custom_price !== undefined || stock_count !== undefined || branch_active !== undefined) {
+    const { data: existing } = await supabase
+      .from('branch_product_settings')
+      .select('id')
+      .eq('product_id', productId)
+      .eq('branch_id', branchId)
+      .maybeSingle()
+
+    const settingsData: any = {}
+    if (custom_price !== undefined) settingsData.custom_price = custom_price
+    if (stock_count !== undefined) settingsData.stock_count = stock_count
+    if (branch_active !== undefined) settingsData.is_active = branch_active
+
+    if (existing) {
+      await supabase.from('branch_product_settings').update(settingsData).eq('id', existing.id)
+    } else {
+      await supabase.from('branch_product_settings').insert({ product_id: productId, branch_id: branchId, ...settingsData })
+    }
+  }
+
+  return { success: true }
+}
+
+// ========== MASA YÖNETİMİ ==========
+
+export async function fetchTablesConfigAction(branchId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { data } = await supabase.from('tables').select('*').eq('branch_id', branchId).order('name', { ascending: true })
+  return data || []
+}
+
+export async function createTableAction(branchId: string, data: { name: string; capacity: number }) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { data: table, error } = await supabase
+    .from('tables')
+    .insert({ branch_id: branchId, name: data.name, capacity: data.capacity, status: 'empty', is_active: true })
+    .select('id, qr_token')
+    .single()
+  if (error) return { success: false, error: error.message }
+  return { success: true, id: table.id, qrToken: table.qr_token }
+}
+
+export async function updateTableAction(tableId: string, data: { name?: string; capacity?: number; is_active?: boolean }) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { error } = await supabase.from('tables').update(data).eq('id', tableId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+export async function getTableQRAction(tableId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { data: table } = await supabase.from('tables').select('qr_token, name').eq('id', tableId).single()
+  if (!table) return { success: false as const, error: 'Masa bulunamadı.' }
+  const { generateTableQR } = await import('@/lib/qr')
+  const qrDataUrl = await generateTableQR(table.qr_token)
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+  return { success: true as const, qrDataUrl, tableName: table.name, qrUrl: `${baseUrl}/m/${table.qr_token}` }
 }
