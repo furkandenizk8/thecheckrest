@@ -178,11 +178,20 @@ const STAFF_REQUEST_LABELS: Record<string, { label: string; icon: string }> = {
   cleaning: { label: 'Masayı Temizlet', icon: '🧹' }
 }
 
+function escapeHtml(str: string): string {
+  if (!str) return ''
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 function getT(lang: string, key: string, params: Record<string, string | number> = {}): string {
   const dictionary = botTranslations[lang] || botTranslations.en
   let text = dictionary[key] || botTranslations.en[key] || key
   Object.entries(params).forEach(([k, v]) => {
-    text = text.replace(new RegExp(`{${k}}`, 'g'), String(v))
+    const escapedValue = typeof v === 'string' ? escapeHtml(v) : String(v)
+    text = text.replace(new RegExp(`{${k}}`, 'g'), escapedValue)
   })
   return text
 }
@@ -231,34 +240,48 @@ async function sendOrEditPhotoMessage(
         })
       })
       if (res.ok) return
+      
+      const errText = await res.text()
+      console.error('editMessageMedia failed:', errText)
     } catch (e) {
       console.error('editMessageMedia failed, doing delete-and-send fallback:', e)
     }
-
-    // 2. Fallback: delete the previous message
-    try {
-      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, message_id: messageId })
-      })
-    } catch (e) {
-      console.error('deleteMessage failed:', e)
-    }
   }
 
-  // 3. Send a new photo message
-  await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      photo: photoUrl,
-      caption: caption,
-      parse_mode: 'HTML',
-      reply_markup: replyMarkup
+  // 2. Fallback: Send a new photo message first before deleting the old one
+  try {
+    const sendRes = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: photoUrl,
+        caption: caption,
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup
+      })
     })
-  })
+
+    if (sendRes.ok) {
+      // 3. Only delete the previous message if the new one was sent successfully
+      if (messageId) {
+        try {
+          await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, message_id: messageId })
+          })
+        } catch (e) {
+          console.error('deleteMessage failed:', e)
+        }
+      }
+    } else {
+      const sendErrText = await sendRes.text()
+      console.error('sendPhoto fallback failed:', sendErrText)
+    }
+  } catch (e) {
+    console.error('sendPhoto fallback exception:', e)
+  }
 }
 
 function getProductDetails(product: any, lang: string) {
@@ -707,9 +730,9 @@ async function showCategoryProducts(
       const price = Number(prod.base_price).toFixed(2)
       const qtyInCart = cart[prod.id] || 0
       
-      text += `<b>${idx + 1}. ${name}</b> — <b>${price} GEL</b>\n`
+      text += `<b>${idx + 1}. ${escapeHtml(name)}</b> — <b>${price} GEL</b>\n`
       if (desc) {
-        text += `<i>${desc}</i>\n`
+        text += `<i>${escapeHtml(desc)}</i>\n`
       }
       if (qtyInCart > 0) {
         text += `👉 <i>Sepetinizde: <b>${qtyInCart} adet</b></i>\n`
@@ -760,11 +783,11 @@ async function showProductDetails(
   const allergens = (product.allergens || []).join(', ')
   const productPhoto = product.photo_url || logoUrl
 
-  let text = `🍔 <b>${name}</b>\n━━━━━━━━━━━━━━━━━\n`
-  if (desc) text += `<i>${desc}</i>\n\n`
+  let text = `🍔 <b>${escapeHtml(name)}</b>\n━━━━━━━━━━━━━━━━━\n`
+  if (desc) text += `<i>${escapeHtml(desc)}</i>\n\n`
   
-  if (ingredients) text += `📝 <b>İçindekiler / Ingredients:</b>\n${ingredients}\n\n`
-  if (allergens) text += `⚠️ <b>Alerjenler / Allergens:</b> ${allergens}\n\n`
+  if (ingredients) text += `📝 <b>İçindekiler / Ingredients:</b>\n${escapeHtml(ingredients)}\n\n`
+  if (allergens) text += `⚠️ <b>Alerjenler / Allergens:</b> ${escapeHtml(allergens)}\n\n`
   
   if (calories > 0) {
     text += `🔥 <b>Enerji ve Besin Ögeleri:</b>\n`
@@ -981,14 +1004,14 @@ async function handleConfirmOrder(
   products.forEach((prod: any) => {
     const qty = cart[prod.id] || 0
     const name = prod.name_tr || prod.name_en || 'Ürün'
-    itemsHtml += `• ${qty}x <b>${name}</b> - ${(qty * Number(prod.base_price)).toFixed(2)} ${currency}\n`
+    itemsHtml += `• ${qty}x <b>${escapeHtml(name)}</b> - ${(qty * Number(prod.base_price)).toFixed(2)} ${currency}\n`
   })
 
   const alertMessage = `📦 <b>YENİ SİPARİŞ (Telegram Chat)!</b>
 ━━━━━━━━━━━━━━━━━
-🏢 <b>Şube:</b> ${branchName}
-🎯 <b>Masa:</b> ${tableName}
-👤 <b>Müşteri:</b> ${customerName} (Telegram Chat)
+🏢 <b>Şube:</b> ${escapeHtml(branchName)}
+🎯 <b>Masa:</b> ${escapeHtml(tableName)}
+👤 <b>Müşteri:</b> ${escapeHtml(customerName)} (Telegram Chat)
 🔢 <b>Sipariş ID:</b> <code>#${order.id.slice(0, 8).toUpperCase()}</code>
 ━━━━━━━━━━━━━━━━━
 🛒 <b>Ürünler:</b>
@@ -1073,11 +1096,11 @@ async function handleServiceRequest(
 
   const alertMessage = `🚨 <b>Masa Talebi (Telegram Chat)!</b>
 ━━━━━━━━━━━━━━━━━
-🏢 <b>Şube:</b> ${branchName}
-🎯 <b>Masa:</b> ${tableName}
-👤 <b>Müşteri:</b> ${customerName} (Telegram Chat)
+🏢 <b>Şube:</b> ${escapeHtml(branchName)}
+🎯 <b>Masa:</b> ${escapeHtml(tableName)}
+👤 <b>Müşteri:</b> ${escapeHtml(customerName)} (Telegram Chat)
 ━━━━━━━━━━━━━━━━━
-🔔 <b>Talep:</b> ${reqInfo.icon} <b>${reqInfo.label}</b>`
+🔔 <b>Talep:</b> ${reqInfo.icon} <b>${escapeHtml(reqInfo.label)}</b>`
 
   const { sendTelegramNotification } = await import('@/lib/telegram')
   await sendTelegramNotification(alertMessage)
@@ -1181,9 +1204,9 @@ async function handlePaymentRequest(
 
   const alertMessage = `💵 <b>HESAP ÖDEME TALEBİ (Telegram Chat)!</b>
 ━━━━━━━━━━━━━━━━━
-🏢 <b>Şube:</b> ${branchName}
-🎯 <b>Masa:</b> ${tableName}
-👤 <b>Müşteri:</b> ${customerName} (Telegram Chat)
+🏢 <b>Şube:</b> ${escapeHtml(branchName)}
+🎯 <b>Masa:</b> ${escapeHtml(tableName)}
+👤 <b>Müşteri:</b> ${escapeHtml(customerName)} (Telegram Chat)
 💳 <b>Ödeme:</b> ${method === 'cash' ? '💵 Nakit' : '💳 Kredi Kartı'}
 💰 <b>Toplam Tutar:</b> <b>${Number(bill.total_amount).toFixed(2)} ${currency}</b>`
 
