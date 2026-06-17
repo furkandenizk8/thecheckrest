@@ -1,23 +1,32 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Webhook için veritabanına doğrudan bağlanabilen servis istemcisi (RLS bypass etmesi için)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  }
-)
-
 export async function POST(request: Request) {
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token) {
     return NextResponse.json({ error: 'Bot token not configured' }, { status: 500 })
   }
+
+  // Vercel derleme (build) sırasında env değerleri eksik olduğunda çökmemesi için
+  // Supabase client'ını POST fonksiyonu içinde lazily (istek geldiğinde) kuruyoruz.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error('Supabase credentials missing inside Telegram webhook handler')
+    return NextResponse.json({ error: 'Database configuration missing' }, { status: 500 })
+  }
+
+  const supabase = createClient(
+    supabaseUrl,
+    serviceRoleKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
+    }
+  )
 
   try {
     const payload = await request.json()
