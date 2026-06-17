@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { sendTelegramNotification } from '@/lib/telegram'
 
 interface OrderItemParam {
   productId: string
@@ -19,7 +20,7 @@ interface PlaceOrderParams {
 }
 
 /**
- * Müşterinin sepetindeki siparişleri veritabanına kaydeder ve adisyonu günceller.
+ * Müşterinin sepetindeki siparişleri veritabanına kaydeder, adisyonu günceller ve Telegram bildirimi gönderir.
  */
 export async function placeCustomerOrder(params: PlaceOrderParams) {
   const { tableSessionId, billId, tableId, branchId, items, customerNote } = params
@@ -28,7 +29,7 @@ export async function placeCustomerOrder(params: PlaceOrderParams) {
   // 1. Oturumun aktif olup olmadığını doğrula
   const { data: session, error: sessionError } = await supabase
     .from('table_sessions')
-    .select('is_active')
+    .select('is_active, customer_name')
     .eq('id', tableSessionId)
     .single()
 
@@ -86,16 +87,11 @@ export async function placeCustomerOrder(params: PlaceOrderParams) {
   }
 
   // 5. Adisyonun (bill) toplam tutarını ve servis ücretini güncelle
-  // Adisyona bağlı tüm aktif siparişlerin toplamını al
-  const { data: billOrders, error: sumError } = await supabase
+  const { data: billOrders } = await supabase
     .from('orders')
     .select('total_amount')
     .eq('bill_id', billId)
     .neq('status', 'cancelled')
-
-  if (sumError) {
-    console.error('Error calculating bill sum:', sumError)
-  }
 
   let billTotal = 0
   if (billOrders) {
@@ -104,20 +100,27 @@ export async function placeCustomerOrder(params: PlaceOrderParams) {
     })
   }
 
-  // Şube servis ücreti yüzdesini çek
+  // Şube detaylarını çek (Servis ücreti ve isim için)
   const { data: branchData } = await supabase
     .from('branches')
-    .select('service_fee_percent')
+    .select('name, currency, service_fee_percent')
     .eq('id', branchId)
+    .single()
+
+  const { data: tableData } = await supabase
+    .from('tables')
+    .select('name')
+    .eq('id', tableId)
     .single()
 
   const serviceFeePercent = branchData?.service_fee_percent ? Number(branchData.service_fee_percent) : 0
   const serviceFee = billTotal * (serviceFeePercent / 100)
+  const finalTotal = billTotal + serviceFee
 
   const { error: billUpdateError } = await supabase
     .from('bills')
     .update({
-      total_amount: billTotal + serviceFee,
+      total_amount: finalTotal,
       service_fee: serviceFee
     })
     .eq('id', billId)
@@ -125,6 +128,50 @@ export async function placeCustomerOrder(params: PlaceOrderParams) {
   if (billUpdateError) {
     console.error('Error updating bill totals:', billUpdateError)
   }
+
+  // 6. TELEGRAM BİLDİRİMİ GÖNDER (Arka planda çalışır, sipariş akışını bloke etmez)
+  (async () => {
+    try {
+      // Ürün isimlerini çek
+      const productIds = items.map((i) => i.productId)
+      const { data: products } = await supabase
+        .from('products')
+        .select('id, name_tr, name_en')
+        .in('id', productIds)
+
+      const productMap = new Map<string, string>()
+      if (products) {
+        products.forEach((p) => productMap.set(p.id, p.name_tr || p.name_en || 'Bilinmeyen Ürün'))
+      }
+
+      // Mesajı oluştur
+      let itemsListHtml = ''
+      items.forEach((item) => {
+        const prodName = productMap.get(item.productId) || 'Ürün'
+        itemsListHtml += `• ${item.quantity}x <b>${prodName}</b> - ${(item.quantity * item.unitPrice).toFixed(2)} ${branchData?.currency || 'GEL'}\n`
+        if (item.chefNote) {
+          itemsListHtml += `  <i>Not: ${item.chefNote}</i>\n`
+        }
+      })
+
+      const telegramMessage = 
+`📦 <b>YENİ SİPARİŞ!</b>
+━━━━━━━━━━━━━━━━━
+🏢 <b>Şube:</b> ${branchData?.name || 'Bilinmeyen Şube'}
+🎯 <b>Masa:</b> ${tableData?.name || 'Bilinmeyen Masa'}
+👤 <b>Müşteri:</b> ${session.customer_name}
+🔢 <b>Sipariş ID:</b> <code>#${order.id.slice(0, 8).toUpperCase()}</code>
+━━━━━━━━━━━━━━━━━
+🛒 <b>Ürünler:</b>
+${itemsListHtml}━━━━━━━━━━━━━━━━━
+💰 <b>Toplam Tutar:</b> <b>${finalTotal.toFixed(2)} ${branchData?.currency || 'GEL'}</b> (Servis Dahil)
+${customerNote ? `💬 <b>Müşteri Genel Notu:</b> ${customerNote}` : ''}`
+
+      await sendTelegramNotification(telegramMessage)
+    } catch (telegramErr) {
+      console.error('Failed to construct and send Telegram order notification:', telegramErr)
+    }
+  })()
 
   return { success: true, orderId: order.id }
 }
@@ -136,8 +183,17 @@ interface CreateServiceRequestParams {
   type: 'waiter' | 'bill' | 'napkin' | 'water' | 'cleaning' | 'salt'
 }
 
+const REQUEST_LABELS: Record<string, { label: string; icon: string }> = {
+  waiter: { label: 'Garson Çağır', icon: '🙋‍♂️' },
+  bill: { label: 'Hesap İste', icon: '💵' },
+  napkin: { label: 'Peçete İste', icon: '🧻' },
+  water: { label: 'Su İste', icon: '💧' },
+  salt: { label: 'Tuz/Karabiber İste', icon: '🧂' },
+  cleaning: { label: 'Masayı Temizlet', icon: '🧹' }
+}
+
 /**
- * Garson çağrısı veya servis talebi oluşturur.
+ * Garson çağrısı veya servis talebi oluşturur ve Telegram üzerinden garson grubuna iletir.
  */
 export async function createServiceRequest(params: CreateServiceRequestParams) {
   const { tableSessionId, tableId, branchId, type } = params
@@ -168,6 +224,44 @@ export async function createServiceRequest(params: CreateServiceRequestParams) {
     console.error('Error creating service request:', error)
     return { success: false, error: 'Talep iletilemedi.' }
   }
+
+  // Telegram Bildirimi Gönder
+  (async () => {
+    try {
+      const { data: session } = await supabase
+        .from('table_sessions')
+        .select('customer_name')
+        .eq('id', tableSessionId)
+        .single()
+
+      const { data: branchData } = await supabase
+        .from('branches')
+        .select('name')
+        .eq('id', branchId)
+        .single()
+
+      const { data: tableData } = await supabase
+        .from('tables')
+        .select('name')
+        .eq('id', tableId)
+        .single()
+
+      const reqInfo = REQUEST_LABELS[type] || { label: type, icon: '🔔' }
+
+      const telegramMessage = 
+`🚨 <b>Masa Talebi!</b>
+━━━━━━━━━━━━━━━━━
+🏢 <b>Şube:</b> ${branchData?.name || 'Bilinmeyen Şube'}
+🎯 <b>Masa:</b> ${tableData?.name || 'Bilinmeyen Masa'}
+👤 <b>Müşteri:</b> ${session?.customer_name || 'Bilinmeyen'}
+━━━━━━━━━━━━━━━━━
+🔔 <b>Talep:</b> ${reqInfo.icon} <b>${reqInfo.label}</b>
+`
+      await sendTelegramNotification(telegramMessage)
+    } catch (telegramErr) {
+      console.error('Failed to send Telegram service request notification:', telegramErr)
+    }
+  })()
 
   return { success: true, requestId: data.id }
 }
