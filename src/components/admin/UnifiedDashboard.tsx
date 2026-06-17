@@ -30,6 +30,7 @@ import {
   Trash2,
   Settings,
   UtensilsCrossed,
+  Layers,
 } from 'lucide-react'
 
 interface UnifiedDashboardProps {
@@ -160,19 +161,44 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
   const tableOrders = selectedTable ? data.activeOrders.filter(o => o.table_id === selectedTable.id) : []
 
   const handleUpdateOrderItemStatus = async (itemId: string, status: string) => {
-    await updateOrderItemStatusAction(itemId, status)
+    setData(prev => ({
+      ...prev,
+      activeOrders: prev.activeOrders.map(order => ({
+        ...order,
+        order_items: order.order_items?.map((item: any) =>
+          item.id === itemId ? { ...item, status } : item
+        )
+      }))
+    }))
+    updateOrderItemStatusAction(itemId, status).catch(() => {})
   }
 
   const handleUpdateOrderStatus = async (orderId: string, status: string) => {
-    await updateOrderStatusAction(orderId, status)
+    setData(prev => ({
+      ...prev,
+      activeOrders: prev.activeOrders.map(order =>
+        order.id === orderId ? { ...order, status } : order
+      )
+    }))
+    updateOrderStatusAction(orderId, status).catch(() => {})
   }
 
   const handleAcknowledgeRequest = async (requestId: string) => {
-    await acknowledgeServiceRequestAction(requestId)
+    setData(prev => ({
+      ...prev,
+      activeRequests: prev.activeRequests.map(req =>
+        req.id === requestId ? { ...req, status: 'acknowledged' } : req
+      )
+    }))
+    acknowledgeServiceRequestAction(requestId).catch(() => {})
   }
 
   const handleCompleteRequest = async (requestId: string) => {
-    await completeServiceRequestAction(requestId)
+    setData(prev => ({
+      ...prev,
+      activeRequests: prev.activeRequests.filter(req => req.id !== requestId)
+    }))
+    completeServiceRequestAction(requestId).catch(() => {})
   }
 
   const handleResetTable = async (tableId: string) => {
@@ -351,6 +377,13 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
           >
             <Settings className="w-4 h-4" />
             <span>Masa Ayarları</span>
+          </Link>
+          <Link
+            href="/panel/stations"
+            className="flex-1 md:flex-none flex items-center gap-2.5 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-zinc-300 hover:bg-zinc-900/30 border border-transparent transition"
+          >
+            <Layers className="w-4 h-4" />
+            <span>Birimler</span>
           </Link>
         </nav>
 

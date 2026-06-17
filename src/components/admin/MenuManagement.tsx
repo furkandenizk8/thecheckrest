@@ -6,6 +6,7 @@ import {
   fetchBranchesAction,
   fetchCategoriesAction,
   fetchProductsAction,
+  fetchStationsAction,
   createCategoryAction,
   updateCategoryAction,
   createProductAction,
@@ -51,6 +52,7 @@ interface Category {
   name_en: string
   sort_order: number
   is_active: boolean
+  station_id?: string | null
 }
 
 interface Product {
@@ -332,15 +334,18 @@ function ProductModal({
 function CategoryModal({
   category,
   branchId,
+  stations,
   onClose,
   onSaved,
 }: {
   category: Category | null
   branchId: string
+  stations: any[]
   onClose: () => void
   onSaved: () => void
 }) {
   const [names, setNames] = useState({ tr: category?.name_tr ?? '', en: '', ka: '', ru: '' })
+  const [stationId, setStationId] = useState<string>(category?.station_id ?? '')
   const [saving, setSaving] = useState(false)
   const [translating, setTranslating] = useState(false)
   const [error, setError] = useState('')
@@ -364,6 +369,7 @@ function CategoryModal({
         name_en: names.en || names.tr,
         name_ka: names.ka || names.tr,
         name_ru: names.ru || names.tr,
+        station_id: stationId || null,
       }
       let res: any
       if (category) {
@@ -412,6 +418,21 @@ function CategoryModal({
               </div>
             ))}
           </div>
+          {stations.length > 0 && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase">Birim (Hazırlayan)</label>
+              <select
+                value={stationId}
+                onChange={e => setStationId(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none transition"
+              >
+                <option value="">— Birim seçin (opsiyonel) —</option>
+                {stations.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {error && <div className="p-3 bg-red-950/20 border border-red-900/30 text-red-400 rounded-xl text-xs">{error}</div>}
           <div className="flex gap-2">
             <button type="button" onClick={onClose}
@@ -437,6 +458,7 @@ export default function MenuManagement() {
   const [selectedBranchId, setSelectedBranchId] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [stations, setStations] = useState<any[]>([])
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -453,12 +475,14 @@ export default function MenuManagement() {
   const reload = useCallback(async () => {
     if (!selectedBranchId) return
     setLoading(true)
-    const [cats, prods] = await Promise.all([
+    const [cats, prods, stats] = await Promise.all([
       fetchCategoriesAction(selectedBranchId),
       fetchProductsAction(selectedBranchId),
+      fetchStationsAction(selectedBranchId),
     ])
     setCategories(cats)
     setProducts(prods)
+    setStations(stats)
     if (!selectedCategoryId && cats.length > 0) setSelectedCategoryId(cats[0].id)
     setLoading(false)
   }, [selectedBranchId, selectedCategoryId])
@@ -638,6 +662,7 @@ export default function MenuManagement() {
         <CategoryModal
           category={categoryModal.category}
           branchId={selectedBranchId}
+          stations={stations}
           onClose={() => setCategoryModal({ open: false, category: null })}
           onSaved={reload}
         />

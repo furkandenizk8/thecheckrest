@@ -226,7 +226,7 @@ export async function fetchUnifiedDashboardData(branchId: string) {
     .neq('status', 'done')
     .order('created_at', { ascending: true })
 
-  // 5. Fetch active orders
+  // 5. Fetch active orders (station bilgisi dahil)
   const { data: activeOrders } = await supabase
     .from('orders')
     .select(`
@@ -237,7 +237,12 @@ export async function fetchUnifiedDashboardData(branchId: string) {
           name_tr,
           name_en,
           name_ka,
-          name_ru
+          name_ru,
+          categories (
+            id,
+            station_id,
+            stations (id, name, color)
+          )
         )
       )
     `)
@@ -246,12 +251,21 @@ export async function fetchUnifiedDashboardData(branchId: string) {
     .neq('status', 'delivered')
     .order('created_at', { ascending: true })
 
+  // 6. Fetch stations
+  const { data: stations } = await supabase
+    .from('stations')
+    .select('*')
+    .eq('branch_id', branchId)
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+
   return {
     tables: tables || [],
     activeSessions: activeSessions || [],
     openBills: openBills || [],
     activeRequests: activeRequests || [],
-    activeOrders: activeOrders || []
+    activeOrders: activeOrders || [],
+    stations: stations || [],
   }
 }
 
@@ -305,6 +319,52 @@ export async function updateOrderItemStatusAction(itemId: string, status: string
     .eq('id', itemId)
 
   if (error) return { success: false, error: error.message }
+
+  // Tüm kalemler ready/delivered olunca siparişi otomatik ready yap + garsona bildir
+  if (status === 'ready') {
+    const { data: item } = await supabase
+      .from('order_items')
+      .select('order_id')
+      .eq('id', itemId)
+      .single()
+
+    if (item) {
+      const { data: allItems } = await supabase
+        .from('order_items')
+        .select('status')
+        .eq('order_id', item.order_id)
+
+      const allReady = allItems?.every(i => i.status === 'ready' || i.status === 'delivered')
+
+      if (allReady) {
+        await supabase
+          .from('orders')
+          .update({ status: 'ready', updated_at: new Date().toISOString() })
+          .eq('id', item.order_id)
+          .neq('status', 'delivered')
+
+        // Garsona bildirim — ana TELEGRAM_CHAT_ID'ye
+        const { data: order } = await supabase
+          .from('orders')
+          .select('tables(name), branches(name), table_sessions(customer_name)')
+          .eq('id', item.order_id)
+          .single()
+
+        if (order) {
+          const msg =
+`🍽 <b>SİPARİŞ HAZIR — MASAYA GÖTÜR!</b>
+━━━━━━━━━━━━━━━━━
+🏢 <b>Şube:</b> ${(order.branches as any)?.name || 'Şube'}
+🎯 <b>Masa:</b> ${(order.tables as any)?.name || 'Masa'}
+👤 <b>Müşteri:</b> ${(order.table_sessions as any)?.customer_name || 'Müşteri'}
+━━━━━━━━━━━━━━━━━
+✅ Tüm birimler hazırladı. Lütfen teslim edin.`
+          sendTelegramNotification(msg).catch(console.error)
+        }
+      }
+    }
+  }
+
   return { success: true }
 }
 
@@ -464,7 +524,7 @@ export async function fetchCategoriesAction(branchId: string) {
   return data || []
 }
 
-export async function createCategoryAction(branchId: string, data: { name_tr: string; name_en?: string; name_ka?: string; name_ru?: string; sort_order?: number }) {
+export async function createCategoryAction(branchId: string, data: { name_tr: string; name_en?: string; name_ka?: string; name_ru?: string; sort_order?: number; station_id?: string | null }) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
   const { data: created, error } = await supabase
@@ -477,6 +537,7 @@ export async function createCategoryAction(branchId: string, data: { name_tr: st
       name_ru: data.name_ru || data.name_tr,
       sort_order: data.sort_order ?? 0,
       is_active: true,
+      station_id: data.station_id ?? null,
     })
     .select('id')
     .single()
@@ -484,7 +545,7 @@ export async function createCategoryAction(branchId: string, data: { name_tr: st
   return { success: true, id: created.id }
 }
 
-export async function updateCategoryAction(categoryId: string, data: { name_tr?: string; name_en?: string; name_ka?: string; name_ru?: string; sort_order?: number; is_active?: boolean }) {
+export async function updateCategoryAction(categoryId: string, data: { name_tr?: string; name_en?: string; name_ka?: string; name_ru?: string; sort_order?: number; is_active?: boolean; station_id?: string | null }) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
   const { error } = await supabase.from('categories').update(data).eq('id', categoryId)
@@ -661,4 +722,51 @@ export async function getTableQRAction(tableId: string) {
   const qrDataUrl = await generateTableQR(table.qr_token)
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
   return { success: true as const, qrDataUrl, tableName: table.name, qrUrl: `${baseUrl}/m/${table.qr_token}` }
+}
+
+// ========== BİRİM (STATION) YÖNETİMİ ==========
+
+export async function fetchStationsAction(branchId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from('stations')
+    .select('*')
+    .eq('branch_id', branchId)
+    .order('sort_order', { ascending: true })
+  return data || []
+}
+
+export async function createStationAction(
+  branchId: string,
+  data: { name: string; color?: string; telegram_chat_id?: string; sort_order?: number }
+) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { data: station, error } = await supabase
+    .from('stations')
+    .insert({ branch_id: branchId, ...data, is_active: true })
+    .select('id')
+    .single()
+  if (error) return { success: false, error: error.message }
+  return { success: true, id: station.id }
+}
+
+export async function updateStationAction(
+  stationId: string,
+  data: { name?: string; color?: string; telegram_chat_id?: string; sort_order?: number; is_active?: boolean }
+) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { error } = await supabase.from('stations').update(data).eq('id', stationId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+export async function deleteStationAction(stationId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { error } = await supabase.from('stations').delete().eq('id', stationId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
 }

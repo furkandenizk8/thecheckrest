@@ -2,11 +2,10 @@
  * Telegram botu üzerinden belirtilen gruba/kanala HTML formatında bildirim gönderir.
  * @param message Gönderilecek mesaj içeriği (HTML etiketleri destekler)
  */
-export async function sendTelegramNotification(message: string): Promise<boolean> {
+export async function sendTelegramNotification(message: string, targetChatId?: string): Promise<boolean> {
   const token = process.env.TELEGRAM_BOT_TOKEN
-  const chatId = process.env.TELEGRAM_CHAT_ID
+  const chatId = targetChatId || process.env.TELEGRAM_CHAT_ID
 
-  // Eğer token veya chatId girilmemişse sessizce iptal et (opsiyonel özellik)
   if (!token || !chatId || token === 'YOUR_TELEGRAM_BOT_TOKEN_HERE' || chatId === 'YOUR_TELEGRAM_CHAT_ID_HERE') {
     return false
   }

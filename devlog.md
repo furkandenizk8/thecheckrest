@@ -1,3 +1,45 @@
+## 2026-06-17 — Oturum 2: Optimistic Updates + Birim (Station) Sistemi
+
+### Yapılanlar
+- **Optimistic updates**: Tüm butonlar (Aldım/Hazır, Gördüm/Tamamlandı, item Başla/Hazır) artık anında state günceller, server action arka planda çalışır — buton gecikmesi tamamen ortadan kalktı
+- **Birim (Station) CRUD**: `fetchStationsAction`, `createStationAction`, `updateStationAction`, `deleteStationAction` admin.ts'e eklendi
+- **StationManagement bileşeni**: Tam CRUD arayüzü — birim ekle/düzenle/sil/pasif et, renk seçici, Telegram Chat ID alanı, sıra numarası
+- **/panel/stations sayfası**: Yeni sidebar linki + sayfa oluşturuldu
+- **Kategori → Birim bağlantısı**: MenuManagement'taki kategori formuna "Birim (Hazırlayan)" seçici eklendi
+- **createCategoryAction / updateCategoryAction**: `station_id` parametresi eklendi
+- **Sidebar "Birimler" linki**: UnifiedDashboard'da Layers ikonu ile `/panel/stations` bağlantısı eklendi
+
+### Proje Durumu
+- [x] Order flow (Aldım/Hazır/Auto-deliver)
+- [x] Supabase realtime (polling kaldırıldı)
+- [x] Ses bildirimi (Web Audio API)
+- [x] Optimistic updates (buton gecikmesi yok)
+- [x] Menü yönetimi (/panel/management)
+- [x] Masa ayarları (/panel/table-config)
+- [x] Garson istekleri 2-adım akışı (Gördüm→Tamamlandı)
+- [x] Otomatik dil çevirme (MyMemory API)
+- [x] Station CRUD + StationManagement UI
+- [x] Migration dosyası hazır (005_stations.sql) — DB'ye manuel uygulanması lazım
+- [ ] Migration DB'ye uygulanmadı → stations şu an çalışmıyor
+- [ ] customer.ts: birime göre Telegram yönlendirme
+- [ ] Mutfak sekmesinde birim filtresi (tab'lar)
+
+### Kritik Kararlar / Notlar
+- Stations migration (005_stations.sql) Supabase dashboard SQL Editor'dan manuel uygulanmalı
+- Birim sistemi tamamlandıktan sonra customer.ts'de siparişler birime göre Telegram'a yönlendirilecek
+- Rol tabanlı filtreleme yok, herkes her birimi görüyor
+
+### Nerede Kaldık
+StationManagement tamamlandı, MenuManagement'a birim seçici eklendi. Migrations henüz uygulanmadı. customer.ts'de per-station Telegram yönlendirme henüz yapılmadı.
+
+### Sıradaki Adım
+1. Supabase dashboard → SQL Editor → `supabase/migrations/005_stations.sql` içeriğini yapıştır ve çalıştır
+2. Birim ekranında birkaç birim oluştur (Mutfak, Bar vb.) ve kategori formlarından birimlere ata
+3. customer.ts'e per-station Telegram yönlendirme ekle (sipariş gelince her birim kendi telegram_chat_id'ye bildirim alır)
+4. Mutfak sekmesine birim filtresi (tab'lar) ekle
+
+---
+
 ## 2026-06-17 — Oturum 1: Order Flow + Realtime + Menü & Masa Yönetimi
 
 ### Yapılanlar
