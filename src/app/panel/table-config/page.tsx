@@ -1,11 +1,5 @@
-import type { Metadata } from 'next'
-import TableConfig from '@/components/admin/TableConfig'
-
-export const metadata: Metadata = {
-  title: 'Masa Ayarları | thecheckmenu',
-  description: 'Masa ekle, düzenle ve QR kod üret.',
-}
+import { redirect } from 'next/navigation'
 
 export default function TableConfigPage() {
-  return <TableConfig />
+  redirect('/panel/management')
 }

@@ -1,3 +1,24 @@
+## 2026-06-17 — Oturum 3: ManagementPanel + Masa Silme/Sıfırlama + Telegram Bug Fix
+
+### Yapılanlar
+- **ManagementPanel**: Tek birleşik yönetim sayfası — sol sidebar nav (Menü / Masalar / Birimler), sağda içerik; `/panel/management` giriş noktası, diğer sayfalar oraya redirect ediyor
+- **embedded prop**: MenuManagement, TableConfig, StationManagement bileşenlerine `embedded` prop eklendi; ManagementPanel içinde header gizleniyor
+- **Masa silme**: `deleteTableAction` eklendi, her masa kartında hover'da çöp ikonu
+- **Masa aktif/pasif**: Masa kartında doğrudan toggle butonu
+- **Masa sıfırlama**: TableConfig'teki occupied/dirty masalarda hızlı RotateCcw ikonu ile sıfırlama butonu
+- **Telegram bug fix**: `/start <token>` ile session başka masaya taşınırken eski masa otomatik 'empty' yapılmıyor — oturumu taşırken artık eski masayı da sıfırlıyor (başka aktif session yoksa)
+- **UnifiedDashboard sidebar**: Üç ayrı yönetim linki yerine tek "Yönetim" → `/panel/management`
+
+### Nerede Kaldık
+ManagementPanel birleşik yapı tamamlandı. Telegram masa stuck sorunu düzeltildi.
+
+### Sıradaki Adım
+1. Supabase migration 005_stations.sql uygulanmalı
+2. customer.ts per-station Telegram yönlendirmesi
+3. Mutfak sekmesinde birim filtre tab'ları
+
+---
+
 ## 2026-06-17 — Oturum 2: Optimistic Updates + Birim (Station) Sistemi
 
 ### Yapılanlar

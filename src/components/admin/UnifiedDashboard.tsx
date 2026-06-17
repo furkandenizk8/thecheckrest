@@ -368,22 +368,8 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
             href="/panel/management"
             className="flex-1 md:flex-none flex items-center gap-2.5 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-zinc-300 hover:bg-zinc-900/30 border border-transparent transition"
           >
-            <UtensilsCrossed className="w-4 h-4" />
-            <span>Menü Yönetimi</span>
-          </Link>
-          <Link
-            href="/panel/table-config"
-            className="flex-1 md:flex-none flex items-center gap-2.5 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-zinc-300 hover:bg-zinc-900/30 border border-transparent transition"
-          >
             <Settings className="w-4 h-4" />
-            <span>Masa Ayarları</span>
-          </Link>
-          <Link
-            href="/panel/stations"
-            className="flex-1 md:flex-none flex items-center gap-2.5 px-4 py-3 rounded-2xl text-xs font-bold text-zinc-600 hover:text-zinc-300 hover:bg-zinc-900/30 border border-transparent transition"
-          >
-            <Layers className="w-4 h-4" />
-            <span>Birimler</span>
+            <span>Yönetim</span>
           </Link>
         </nav>
 

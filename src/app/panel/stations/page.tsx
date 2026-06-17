@@ -1,5 +1,5 @@
-import StationManagement from '@/components/admin/StationManagement'
+import { redirect } from 'next/navigation'
 
 export default function StationsPage() {
-  return <StationManagement />
+  redirect('/panel/management')
 }

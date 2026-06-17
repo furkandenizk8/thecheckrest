@@ -29,7 +29,7 @@ interface StationForm {
 
 const EMPTY_FORM: StationForm = { name: '', color: 'amber', telegram_chat_id: '', sort_order: '0' }
 
-export default function StationManagement() {
+export default function StationManagement({ embedded }: { embedded?: boolean }) {
   const [branches, setBranches] = useState<any[]>([])
   const [selectedBranchId, setSelectedBranchId] = useState('')
   const [stations, setStations] = useState<any[]>([])
@@ -102,7 +102,7 @@ export default function StationManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050507] text-zinc-100 p-6">
+    <div className={embedded ? 'h-full overflow-y-auto bg-[#050507] text-zinc-100 p-6' : 'min-h-screen bg-[#050507] text-zinc-100 p-6'}>
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>

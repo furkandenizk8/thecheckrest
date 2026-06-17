@@ -713,6 +713,14 @@ export async function updateTableAction(tableId: string, data: { name?: string; 
   return { success: true }
 }
 
+export async function deleteTableAction(tableId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { error } = await supabase.from('tables').delete().eq('id', tableId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
 export async function getTableQRAction(tableId: string) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()

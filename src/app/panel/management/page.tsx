@@ -1,11 +1,10 @@
 import type { Metadata } from 'next'
-import MenuManagement from '@/components/admin/MenuManagement'
+import ManagementPanel from '@/components/admin/ManagementPanel'
 
 export const metadata: Metadata = {
-  title: 'Menü Yönetimi | thecheckmenu',
-  description: 'Kategori ve ürün ekle, düzenle, yönet.',
+  title: 'Yönetim Paneli | thecheckmenu',
 }
 
 export default function ManagementPage() {
-  return <MenuManagement />
+  return <ManagementPanel />
 }

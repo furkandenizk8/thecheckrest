@@ -453,7 +453,7 @@ function CategoryModal({
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
-export default function MenuManagement() {
+export default function MenuManagement({ embedded }: { embedded?: boolean }) {
   const [branches, setBranches] = useState<any[]>([])
   const [selectedBranchId, setSelectedBranchId] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
@@ -494,34 +494,34 @@ export default function MenuManagement() {
     : products
 
   return (
-    <div className="min-h-screen bg-[#050507] text-zinc-100 font-sans">
-      {/* Header */}
-      <header className="bg-zinc-950 border-b border-zinc-900 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/panel" className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition">
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div className="w-8 h-8 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
-            <ChefHat className="w-4 h-4 text-white" />
+    <div className={embedded ? 'h-full flex flex-col bg-[#050507] text-zinc-100 font-sans' : 'min-h-screen bg-[#050507] text-zinc-100 font-sans'}>
+      {!embedded && (
+        <header className="bg-zinc-950 border-b border-zinc-900 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/panel" className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition">
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <div className="w-8 h-8 bg-gradient-to-tr from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
+              <ChefHat className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-zinc-100">Menü Yönetimi</h1>
+              <p className="text-[10px] text-zinc-500">Kategori ve ürün ekle, düzenle</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-sm font-bold text-zinc-100">Menü Yönetimi</h1>
-            <p className="text-[10px] text-zinc-500">Kategori ve ürün ekle, düzenle</p>
-          </div>
-        </div>
+          {branches.length > 0 && (
+            <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl">
+              <MapPin className="w-3.5 h-3.5 text-zinc-500" />
+              <select value={selectedBranchId} onChange={e => setSelectedBranchId(e.target.value)}
+                className="bg-transparent text-xs text-zinc-200 font-semibold focus:outline-none cursor-pointer">
+                {branches.map(b => <option key={b.id} value={b.id} className="bg-zinc-900">{b.name}</option>)}
+              </select>
+            </div>
+          )}
+        </header>
+      )}
 
-        {branches.length > 0 && (
-          <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl">
-            <MapPin className="w-3.5 h-3.5 text-zinc-500" />
-            <select value={selectedBranchId} onChange={e => setSelectedBranchId(e.target.value)}
-              className="bg-transparent text-xs text-zinc-200 font-semibold focus:outline-none cursor-pointer">
-              {branches.map(b => <option key={b.id} value={b.id} className="bg-zinc-900">{b.name}</option>)}
-            </select>
-          </div>
-        )}
-      </header>
-
-      <div className="flex h-[calc(100vh-65px)]">
+      <div className={embedded ? 'flex flex-1 overflow-hidden' : 'flex h-[calc(100vh-65px)]'}>
         {/* Left: Categories */}
         <aside className="w-56 bg-zinc-950/60 border-r border-zinc-900 flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-900">

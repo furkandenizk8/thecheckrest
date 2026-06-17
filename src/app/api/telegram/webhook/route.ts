@@ -529,6 +529,7 @@ export async function POST(request: Request) {
       let session = existingSession
       if (existingSession) {
         if (existingSession.table_id !== tableData.id) {
+          const oldTableId = existingSession.table_id
           const { data: updatedSession } = await supabase
             .from('table_sessions')
             .update({
@@ -540,6 +541,16 @@ export async function POST(request: Request) {
             .select()
             .single()
           session = updatedSession || existingSession
+
+          // Reset old table if no other sessions remain
+          const { count } = await supabase
+            .from('table_sessions')
+            .select('id', { count: 'exact', head: true })
+            .eq('table_id', oldTableId)
+            .eq('is_active', true)
+          if (!count) {
+            await supabase.from('tables').update({ status: 'empty' }).eq('id', oldTableId)
+          }
         }
       } else {
         const { data: newSession } = await supabase
