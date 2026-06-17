@@ -796,24 +796,33 @@ async function showCategoryProducts(
   const cartTotal = Object.values(cart).reduce((a: number, b: number) => a + b, 0)
   const categoryPhoto = category?.photo_url || products?.find((p: any) => p.photo_url)?.photo_url || logoUrl
 
+  const NUM_EMOJI = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟']
+
   let text = `📂 <b>${escapeHtml(categoryName)}</b>\n━━━━━━━━━━━━━━━━━\n\n`
 
   const inlineKeyboard: any[] = []
 
   if (products && products.length > 0) {
-    products.forEach((prod: any) => {
+    products.forEach((prod: any, idx: number) => {
       const { name, desc } = getProductDetails(prod, lang)
       const price = Number(prod.base_price).toFixed(2)
       const qtyInCart = cart[prod.id] || 0
+      const num = NUM_EMOJI[idx] || `${idx + 1}.`
 
-      text += `🍽 <b>${escapeHtml(name)}</b>  <b>${price} GEL</b>\n`
-      if (desc) text += `<i>${escapeHtml(desc)}</i>\n`
-      if (qtyInCart > 0) text += `🛒 <i>${qtyInCart} adet sepette</i>\n`
+      text += `${num} <b>${escapeHtml(name)}</b>\n`
+      text += `💰 <b>${price} GEL</b>`
+      if (qtyInCart > 0) text += `  🛒 <b>${qtyInCart} adet</b>`
       text += '\n'
+      if (desc) text += `<i>${escapeHtml(desc)}</i>\n`
+      text += '\n'
+
+      const btnLabel = qtyInCart > 0
+        ? `${num} 🛒 ${qtyInCart} adet`
+        : `${num} Ekle`
 
       inlineKeyboard.push([
         { text: '➖', callback_data: `rem:${prod.id}` },
-        { text: qtyInCart > 0 ? `${name} (${qtyInCart})` : name, callback_data: `nut:${prod.id}` },
+        { text: btnLabel, callback_data: `nut:${prod.id}` },
         { text: '➕', callback_data: `add:${prod.id}` },
       ])
     })
