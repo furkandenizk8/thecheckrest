@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getOrCreateBill } from '@/lib/restaurant/sessions'
 
+// Default fallback premium cover photo for menus
+const DEFAULT_COVER_PHOTO = 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600'
+
 // Multi-language translations dictionary for the Telegram chatbot
 const botTranslations: Record<string, Record<string, string>> = {
   tr: {
@@ -166,7 +169,6 @@ const botTranslations: Record<string, Record<string, string>> = {
   }
 }
 
-// Service request labels for staff alerts
 const STAFF_REQUEST_LABELS: Record<string, { label: string; icon: string }> = {
   waiter: { label: 'Garson Çağır', icon: '🙋‍♂️' },
   bill: { label: 'Hesap İste', icon: '💵' },
@@ -176,7 +178,6 @@ const STAFF_REQUEST_LABELS: Record<string, { label: string; icon: string }> = {
   cleaning: { label: 'Masayı Temizlet', icon: '🧹' }
 }
 
-// Translation helper
 function getT(lang: string, key: string, params: Record<string, string | number> = {}): string {
   const dictionary = botTranslations[lang] || botTranslations.en
   let text = dictionary[key] || botTranslations.en[key] || key
@@ -186,7 +187,6 @@ function getT(lang: string, key: string, params: Record<string, string | number>
   return text
 }
 
-// Helper: send requests to Telegram Bot API
 async function sendTelegramApi(token: string, method: string, body: any) {
   try {
     const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -203,7 +203,64 @@ async function sendTelegramApi(token: string, method: string, body: any) {
   }
 }
 
-// Product translation helper
+// Custom Helper: Updates both the photo and text of a Telegram message
+async function sendOrEditPhotoMessage(
+  token: string,
+  chatId: number,
+  photoUrl: string,
+  caption: string,
+  replyMarkup: any,
+  messageId?: number
+) {
+  if (messageId) {
+    try {
+      // 1. Try editing the media (photo) and caption together
+      const res = await fetch(`https://api.telegram.org/bot${token}/editMessageMedia`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          message_id: messageId,
+          media: {
+            type: 'photo',
+            media: photoUrl,
+            caption: caption,
+            parse_mode: 'HTML'
+          },
+          reply_markup: replyMarkup
+        })
+      })
+      if (res.ok) return
+    } catch (e) {
+      console.error('editMessageMedia failed, doing delete-and-send fallback:', e)
+    }
+
+    // 2. Fallback: delete the previous message
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, message_id: messageId })
+      })
+    } catch (e) {
+      console.error('deleteMessage failed:', e)
+    }
+  }
+
+  // 3. Send a new photo message
+  await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      photo: photoUrl,
+      caption: caption,
+      parse_mode: 'HTML',
+      reply_markup: replyMarkup
+    })
+  })
+}
+
 function getProductDetails(product: any, lang: string) {
   const name = product[`name_${lang}`] || product.name_en || product.name_tr || product.name_ka || 'Ürün'
   const desc = product[`description_${lang}`] || product.description_en || product.description_tr || product.description_ka || ''
@@ -211,7 +268,6 @@ function getProductDetails(product: any, lang: string) {
   return { name, desc, ingredients }
 }
 
-// Category translation helper
 function getCategoryName(category: any, lang: string) {
   return category[`name_${lang}`] || category.name_en || category.name_tr || category.name_ka || 'Kategori'
 }
@@ -222,7 +278,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Bot token not configured' }, { status: 500 })
   }
 
-  // Supabase Service Client
+  // Supabase Client Config
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -239,7 +295,7 @@ export async function POST(request: Request) {
     const payload = await request.json()
     console.log('Telegram webhook payload:', JSON.stringify(payload, null, 2))
 
-    // 1. HANDLE CALLBACK QUERIES (Clicks on inline buttons)
+    // 1. HANDLE CALLBACK QUERIES
     if (payload.callback_query) {
       const callbackQuery = payload.callback_query
       const chatId = callbackQuery.message.chat.id
@@ -259,7 +315,10 @@ export async function POST(request: Request) {
               id,
               name,
               currency,
-              service_fee_percent
+              service_fee_percent,
+              brands (
+                logo_url
+              )
             )
           )
         `)
@@ -282,6 +341,7 @@ export async function POST(request: Request) {
       const branchId = session.tables?.branches?.id
       const currency = session.tables?.branches?.currency || 'GEL'
       const serviceFeePercent = session.tables?.branches?.service_fee_percent ? Number(session.tables.branches.service_fee_percent) : 0
+      const logoUrl = (session.tables as any)?.branches?.brands?.logo_url || DEFAULT_COVER_PHOTO
       const cart = session.cart || {}
 
       // Split action and param
@@ -292,7 +352,6 @@ export async function POST(request: Request) {
       let alertText = ''
 
       if (action === 'lang') {
-        // Update language
         const selectedLang = param
         await supabase
           .from('table_sessions')
@@ -302,35 +361,31 @@ export async function POST(request: Request) {
         alertText = selectedLang === 'tr' ? 'Türkçe Seçildi' : selectedLang === 'ka' ? 'ქართული არჩეულია' : selectedLang === 'ru' ? 'Выбран русский' : 'English Selected'
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId, text: alertText })
         
-        // Show Main Menu
-        await showMainMenu(token, chatId, tableName, branchName, selectedLang, messageId)
+        await showMainMenu(token, chatId, tableName, branchName, selectedLang, logoUrl, messageId)
       } 
       else if (action === 'menu') {
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
         if (param === 'main') {
-          await showMainMenu(token, chatId, tableName, branchName, lang, messageId)
+          await showMainMenu(token, chatId, tableName, branchName, lang, logoUrl, messageId)
         } else if (param === 'cats') {
-          await showCategories(token, chatId, branchId, lang, messageId)
+          await showCategories(token, chatId, branchId, lang, logoUrl, messageId)
         } else if (param === 'cart') {
-          await showCart(token, chatId, tableName, branchId, lang, cart, serviceFeePercent, currency, supabase, messageId)
+          await showCart(token, chatId, tableName, branchId, lang, cart, serviceFeePercent, currency, logoUrl, supabase, messageId)
         } else if (param === 'service') {
-          await showServiceMenu(token, chatId, lang, messageId)
+          await showServiceMenu(token, chatId, lang, logoUrl, messageId)
         } else if (param === 'payment') {
-          await showPaymentMenu(token, chatId, tableName, branchId, lang, session.table_id, serviceFeePercent, currency, supabase, messageId)
+          await showPaymentMenu(token, chatId, tableName, branchId, lang, session.table_id, serviceFeePercent, currency, logoUrl, supabase, messageId)
         }
       } 
       else if (action === 'cat') {
-        // Show category items
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
-        await showCategoryProducts(token, chatId, param, lang, cart, supabase, messageId)
+        await showCategoryProducts(token, chatId, param, lang, cart, logoUrl, supabase, messageId)
       } 
       else if (action === 'add' || action === 'rem') {
         const productId = param
-        
-        // Fetch product to verify and get category_id
         const { data: product } = await supabase
           .from('products')
-          .select('id, category_id, base_price, name_tr, name_en')
+          .select('id, category_id, base_price')
           .eq('id', productId)
           .single()
 
@@ -348,59 +403,53 @@ export async function POST(request: Request) {
             alertText = getT(lang, 'removedFromCart')
           }
 
-          // Update DB cart
           await supabase
             .from('table_sessions')
             .update({ cart })
             .eq('id', session.id)
 
           await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId, text: alertText })
-          
-          // Refresh products category view
-          await showCategoryProducts(token, chatId, product.category_id, lang, cart, supabase, messageId)
+          await showCategoryProducts(token, chatId, product.category_id, lang, cart, logoUrl, supabase, messageId)
         } else {
           await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId, text: 'Hata: Ürün bulunamadı.' })
         }
       } 
       else if (action === 'nut') {
-        // Show product nutritional details & details
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
-        await showProductDetails(token, chatId, param, lang, supabase, messageId)
+        await showProductDetails(token, chatId, param, lang, logoUrl, supabase, messageId)
       } 
       else if (action === 'cart' && param === 'clear') {
-        // Clear Cart
         await supabase
           .from('table_sessions')
           .update({ cart: {} })
           .eq('id', session.id)
 
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId, text: getT(lang, 'cartCleared') })
-        await showCart(token, chatId, tableName, branchId, lang, {}, serviceFeePercent, currency, supabase, messageId)
+        await showCart(token, chatId, tableName, branchId, lang, {}, serviceFeePercent, currency, logoUrl, supabase, messageId)
       } 
       else if (action === 'order' && param === 'confirm') {
-        // Process order placement
         if (Object.keys(cart).length === 0) {
           await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId, text: getT(lang, 'cartEmpty'), show_alert: true })
         } else {
           await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
-          await handleConfirmOrder(token, chatId, session, cart, branchId, currency, serviceFeePercent, supabase, messageId)
+          await handleConfirmOrder(token, chatId, session, cart, branchId, currency, serviceFeePercent, logoUrl, supabase, messageId)
         }
       } 
       else if (action === 'srv') {
         const type = param
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
-        await handleServiceRequest(token, chatId, session, type, lang, messageId)
+        await handleServiceRequest(token, chatId, session, type, lang, logoUrl, messageId)
       } 
       else if (action === 'pay') {
         const method = param
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
-        await handlePaymentRequest(token, chatId, session, method, lang, serviceFeePercent, currency, supabase, messageId)
+        await handlePaymentRequest(token, chatId, session, method, lang, serviceFeePercent, currency, logoUrl, supabase, messageId)
       }
 
       return NextResponse.json({ ok: true })
     }
 
-    // 2. HANDLE STANDARD CHAT MESSAGES (Start commands)
+    // 2. HANDLE STANDARD CHAT MESSAGES
     const message = payload.message
     if (!message || !message.text) {
       return NextResponse.json({ ok: true })
@@ -409,11 +458,10 @@ export async function POST(request: Request) {
     const chatId = message.chat.id
     const text = message.text.trim()
 
-    // Start with tableToken command (e.g. /start masa1)
+    // Command: /start <tableToken>
     if (text.startsWith('/start ')) {
       const tableToken = text.substring('/start '.length).trim()
 
-      // Look up Table
       const { data: tableData, error: tableError } = await supabase
         .from('tables')
         .select(`
@@ -424,7 +472,10 @@ export async function POST(request: Request) {
             name,
             currency,
             service_fee_percent,
-            languages
+            languages,
+            brands (
+              logo_url
+            )
           )
         `)
         .eq('qr_token', tableToken)
@@ -442,8 +493,8 @@ export async function POST(request: Request) {
 
       const branchName = (tableData.branches as any)?.name || 'Gusto Lounge'
       const tableName = tableData.name
+      const logoUrl = (tableData.branches as any)?.brands?.logo_url || DEFAULT_COVER_PHOTO
 
-      // Create or update table session for this Telegram user
       const deviceId = `tg_${chatId}`
       const { data: existingSession } = await supabase
         .from('table_sessions')
@@ -489,7 +540,7 @@ export async function POST(request: Request) {
         .update({ status: 'occupied' })
         .eq('id', tableData.id)
 
-      // Send greeting & language selection
+      // Send greeting cover photo with language selection
       const welcomeText = getT('tr', 'welcome', { branchName, tableName }) + '\n\n' + getT('tr', 'selectLanguage')
       
       const inlineKeyboard = [
@@ -503,12 +554,7 @@ export async function POST(request: Request) {
         ]
       ]
 
-      await sendTelegramApi(token, 'sendMessage', {
-        chat_id: chatId,
-        text: welcomeText,
-        parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: inlineKeyboard }
-      })
+      await sendOrEditPhotoMessage(token, chatId, logoUrl, welcomeText, { inline_keyboard: inlineKeyboard })
     } else {
       // Plain text fallback - check if user has active session
       const deviceId = `tg_${chatId}`
@@ -519,7 +565,10 @@ export async function POST(request: Request) {
           tables (
             name,
             branches (
-              name
+              name,
+              brands (
+                logo_url
+              )
             )
           )
         `)
@@ -531,8 +580,10 @@ export async function POST(request: Request) {
         const lang = session.language || 'tr'
         const tableName = session.tables?.name || 'Masa'
         const branchName = session.tables?.branches?.name || 'Gusto Lounge'
-        await showMainMenu(token, chatId, tableName, branchName, lang)
+        const logoUrl = (session.tables as any)?.branches?.brands?.logo_url || DEFAULT_COVER_PHOTO
+        await showMainMenu(token, chatId, tableName, branchName, lang, logoUrl)
       } else {
+        // Welcoming text
         await sendTelegramApi(token, 'sendMessage', {
           chat_id: chatId,
           text: '🍽️ <b>thecheckmenu</b>\n\nMenüyü açmak ve sipariş vermek için lütfen masanızda bulunan <b>QR Kodu</b> taratın veya size gönderilen bağlantıya tıklayın.',
@@ -549,7 +600,7 @@ export async function POST(request: Request) {
 }
 
 // ----------------------------------------------------
-// UI SCREEN RENDER HELPERS (EDIT OR SEND MESSAGE)
+// UI SCREEN RENDER HELPERS (EDIT PHOTO & CAPTIONS)
 // ----------------------------------------------------
 
 async function showMainMenu(
@@ -558,6 +609,7 @@ async function showMainMenu(
   tableName: string,
   branchName: string,
   lang: string,
+  logoUrl: string,
   messageId?: number
 ) {
   const text = getT(lang, 'mainMenu', { tableName })
@@ -574,22 +626,7 @@ async function showMainMenu(
     ]
   }
 
-  if (messageId) {
-    await sendTelegramApi(token, 'editMessageText', {
-      chat_id: chatId,
-      message_id: messageId,
-      text,
-      parse_mode: 'HTML',
-      reply_markup: replyMarkup
-    })
-  } else {
-    await sendTelegramApi(token, 'sendMessage', {
-      chat_id: chatId,
-      text,
-      parse_mode: 'HTML',
-      reply_markup: replyMarkup
-    })
-  }
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, text, replyMarkup, messageId)
 }
 
 async function showCategories(
@@ -597,9 +634,9 @@ async function showCategories(
   chatId: number,
   branchId: string,
   lang: string,
+  logoUrl: string,
   messageId: number
 ) {
-  // Fetch branch active categories
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
   const supabase = createClient(supabaseUrl, serviceRoleKey)
@@ -615,7 +652,6 @@ async function showCategories(
   const inlineKeyboard: any[] = []
 
   if (categories && categories.length > 0) {
-    // Lay out categories in 2 columns
     for (let i = 0; i < categories.length; i += 2) {
       const row: any[] = []
       row.push({
@@ -632,16 +668,9 @@ async function showCategories(
     }
   }
 
-  // Back to Main Menu button
   inlineKeyboard.push([{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }])
 
-  await sendTelegramApi(token, 'editMessageText', {
-    chat_id: chatId,
-    message_id: messageId,
-    text,
-    parse_mode: 'HTML',
-    reply_markup: { inline_keyboard: inlineKeyboard }
-  })
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, text, { inline_keyboard: inlineKeyboard }, messageId)
 }
 
 async function showCategoryProducts(
@@ -650,17 +679,16 @@ async function showCategoryProducts(
   categoryId: string,
   lang: string,
   cart: Record<string, number>,
+  logoUrl: string,
   supabase: any,
   messageId: number
 ) {
-  // Fetch Category Name
   const { data: category } = await supabase
     .from('categories')
     .select('*')
     .eq('id', categoryId)
     .single()
 
-  // Fetch Category Products
   const { data: products } = await supabase
     .from('products')
     .select('*')
@@ -688,7 +716,6 @@ async function showCategoryProducts(
       }
       text += '\n'
 
-      // Product row controls: [-] [Product Name (qty)] [+]
       inlineKeyboard.push([
         { text: '➖', callback_data: `rem:${prod.id}` },
         { text: `${name} ${qtyInCart > 0 ? `(${qtyInCart})` : ''}`, callback_data: `nut:${prod.id}` },
@@ -699,19 +726,12 @@ async function showCategoryProducts(
     text += `<i>${getT(lang, 'emptyCategory')}</i>\n`
   }
 
-  // Footer Navigation buttons
   inlineKeyboard.push([
     { text: getT(lang, 'btnBackCats'), callback_data: 'menu:cats' },
     { text: getT(lang, 'btnCart', { count: Object.values(cart).reduce((a, b) => a + b, 0) }), callback_data: 'menu:cart' }
   ])
 
-  await sendTelegramApi(token, 'editMessageText', {
-    chat_id: chatId,
-    message_id: messageId,
-    text,
-    parse_mode: 'HTML',
-    reply_markup: { inline_keyboard: inlineKeyboard }
-  })
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, text, { inline_keyboard: inlineKeyboard }, messageId)
 }
 
 async function showProductDetails(
@@ -719,6 +739,7 @@ async function showProductDetails(
   chatId: number,
   productId: string,
   lang: string,
+  logoUrl: string,
   supabase: any,
   messageId: number
 ) {
@@ -737,6 +758,7 @@ async function showProductDetails(
   const carbs = product.carbs_g || 0
   const fat = product.fat_g || 0
   const allergens = (product.allergens || []).join(', ')
+  const productPhoto = product.photo_url || logoUrl
 
   let text = `🍔 <b>${name}</b>\n━━━━━━━━━━━━━━━━━\n`
   if (desc) text += `<i>${desc}</i>\n\n`
@@ -763,13 +785,7 @@ async function showProductDetails(
     ]
   ]
 
-  await sendTelegramApi(token, 'editMessageText', {
-    chat_id: chatId,
-    message_id: messageId,
-    text,
-    parse_mode: 'HTML',
-    reply_markup: { inline_keyboard: inlineKeyboard }
-  })
+  await sendOrEditPhotoMessage(token, chatId, productPhoto, text, { inline_keyboard: inlineKeyboard }, messageId)
 }
 
 async function showCart(
@@ -781,19 +797,18 @@ async function showCart(
   cart: Record<string, number>,
   serviceFeePercent: number,
   currency: string,
+  logoUrl: string,
   supabase: any,
   messageId: number
 ) {
   let text = getT(lang, 'cartTitle', { tableName })
   const inlineKeyboard: any[] = []
-
   const productIds = Object.keys(cart)
 
   if (productIds.length === 0) {
     text += `<i>${getT(lang, 'cartEmpty')}</i>`
     inlineKeyboard.push([{ text: getT(lang, 'btnMenu'), callback_data: 'menu:cats' }])
   } else {
-    // Fetch products details
     const { data: products } = await supabase
       .from('products')
       .select('*')
@@ -827,7 +842,6 @@ async function showCart(
       total: finalTotal.toFixed(2)
     })
 
-    // Cart Buttons: Confirm Order / Clear Cart
     inlineKeyboard.push([
       { text: getT(lang, 'btnConfirmOrder'), callback_data: 'order:confirm' }
     ])
@@ -839,16 +853,9 @@ async function showCart(
     ])
   }
 
-  // Back to Main Menu button
   inlineKeyboard.push([{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }])
 
-  await sendTelegramApi(token, 'editMessageText', {
-    chat_id: chatId,
-    message_id: messageId,
-    text,
-    parse_mode: 'HTML',
-    reply_markup: { inline_keyboard: inlineKeyboard }
-  })
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, text, { inline_keyboard: inlineKeyboard }, messageId)
 }
 
 async function handleConfirmOrder(
@@ -859,22 +866,18 @@ async function handleConfirmOrder(
   branchId: string,
   currency: string,
   serviceFeePercent: number,
+  logoUrl: string,
   supabase: any,
   messageId: number
 ) {
-  // 1. Get or create active bill for table
   const billId = await getOrCreateBill(supabase, session.table_id, branchId)
   if (!billId) {
-    await sendTelegramApi(token, 'editMessageText', {
-      chat_id: chatId,
-      message_id: messageId,
-      text: '⚠️ Adisyon oluşturulurken hata oluştu. Lütfen tekrar deneyin.',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 Sepete Dön', callback_data: 'menu:cart' }]] }
-    })
+    await sendOrEditPhotoMessage(token, chatId, logoUrl, '⚠️ Adisyon oluşturulurken hata oluştu. Lütfen tekrar deneyin.', {
+      inline_keyboard: [[{ text: '🔙 Sepete Dön', callback_data: 'menu:cart' }]]
+    }, messageId)
     return
   }
 
-  // 2. Fetch products to get prices and names
   const productIds = Object.keys(cart)
   const { data: products } = await supabase
     .from('products')
@@ -906,7 +909,6 @@ async function handleConfirmOrder(
     })
   })
 
-  // 3. Create Order
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .insert({
@@ -923,16 +925,12 @@ async function handleConfirmOrder(
 
   if (orderError || !order) {
     console.error('Error inserting order:', orderError)
-    await sendTelegramApi(token, 'editMessageText', {
-      chat_id: chatId,
-      message_id: messageId,
-      text: '⚠️ Sipariş kaydedilemedi. Lütfen tekrar deneyin.',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 Sepete Dön', callback_data: 'menu:cart' }]] }
-    })
+    await sendOrEditPhotoMessage(token, chatId, logoUrl, '⚠️ Sipariş kaydedilemedi. Lütfen tekrar deneyin.', {
+      inline_keyboard: [[{ text: '🔙 Sepete Dön', callback_data: 'menu:cart' }]]
+    }, messageId)
     return
   }
 
-  // 4. Create Order Items
   const itemsWithOrderId = orderItemsInsert.map(item => ({
     ...item,
     order_id: order.id
@@ -944,11 +942,10 @@ async function handleConfirmOrder(
 
   if (itemsError) {
     console.error('Error inserting items:', itemsError)
-    await supabase.from('orders').delete().eq('id', order.id) // Rollback
+    await supabase.from('orders').delete().eq('id', order.id)
     return
   }
 
-  // 5. Update Bill Totals
   const { data: billOrders } = await supabase
     .from('orders')
     .select('total_amount')
@@ -971,13 +968,11 @@ async function handleConfirmOrder(
     })
     .eq('id', billId)
 
-  // 6. Clear Telegram Cart
   await supabase
     .from('table_sessions')
     .update({ cart: {} })
     .eq('id', session.id)
 
-  // 7. Send notification to the kitchen/staff telegram group
   const branchName = session.tables?.branches?.name || 'Gusto Lounge'
   const tableName = session.tables?.name || 'Masa'
   const customerName = session.customer_name || 'Müşteri'
@@ -1003,27 +998,19 @@ ${itemsHtml}━━━━━━━━━━━━━━━━━
   const { sendTelegramNotification } = await import('@/lib/telegram')
   await sendTelegramNotification(alertMessage)
 
-  // 8. Reply success to user
   const orderIdShort = order.id.slice(0, 8).toUpperCase()
   const successText = getT(session.language || 'tr', 'orderConfirmed', { orderId: orderIdShort })
 
-  await sendTelegramApi(token, 'editMessageText', {
-    chat_id: chatId,
-    message_id: messageId,
-    text: successText,
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: getT(session.language || 'tr', 'btnBackMenu'), callback_data: 'menu:main' }]
-      ]
-    }
-  })
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, successText, {
+    inline_keyboard: [[{ text: getT(session.language || 'tr', 'btnBackMenu'), callback_data: 'menu:main' }]]
+  }, messageId)
 }
 
 async function showServiceMenu(
   token: string,
   chatId: number,
   lang: string,
+  logoUrl: string,
   messageId: number
 ) {
   const text = getT(lang, 'serviceTitle')
@@ -1045,13 +1032,7 @@ async function showServiceMenu(
     ]
   ]
 
-  await sendTelegramApi(token, 'editMessageText', {
-    chat_id: chatId,
-    message_id: messageId,
-    text,
-    parse_mode: 'HTML',
-    reply_markup: { inline_keyboard: inlineKeyboard }
-  })
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, text, { inline_keyboard: inlineKeyboard }, messageId)
 }
 
 async function handleServiceRequest(
@@ -1060,9 +1041,9 @@ async function handleServiceRequest(
   session: any,
   type: string,
   lang: string,
+  logoUrl: string,
   messageId: number
 ) {
-  // Determine Priority
   let priority = 'yellow'
   if (type === 'bill') {
     priority = 'red'
@@ -1070,7 +1051,6 @@ async function handleServiceRequest(
     priority = 'blue'
   }
 
-  // Create Service Request
   const { data, error } = await supabaseCreateServiceRequest(supabaseClient(), {
     tableId: session.table_id,
     branchId: session.branch_id,
@@ -1080,16 +1060,12 @@ async function handleServiceRequest(
   })
 
   if (error) {
-    await sendTelegramApi(token, 'editMessageText', {
-      chat_id: chatId,
-      message_id: messageId,
-      text: '⚠️ Talebiniz iletilemedi. Lütfen tekrar deneyin.',
-      reply_markup: { inline_keyboard: [[{ text: '🔙 Geri Dön', callback_data: 'menu:service' }]] }
-    })
+    await sendOrEditPhotoMessage(token, chatId, logoUrl, '⚠️ Talebiniz iletilemedi. Lütfen tekrar deneyin.', {
+      inline_keyboard: [[{ text: '🔙 Geri Dön', callback_data: 'menu:service' }]]
+    }, messageId)
     return
   }
 
-  // Notify Staff
   const branchName = session.tables?.branches?.name || 'Gusto Lounge'
   const tableName = session.tables?.name || 'Masa'
   const customerName = session.customer_name || 'Müşteri'
@@ -1106,20 +1082,11 @@ async function handleServiceRequest(
   const { sendTelegramNotification } = await import('@/lib/telegram')
   await sendTelegramNotification(alertMessage)
 
-  // Reply confirmation to user
   const successText = getT(lang, 'serviceRequestSent', { type: reqInfo.label })
 
-  await sendTelegramApi(token, 'editMessageText', {
-    chat_id: chatId,
-    message_id: messageId,
-    text: successText,
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]
-      ]
-    }
-  })
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, successText, {
+    inline_keyboard: [[{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]]
+  }, messageId)
 }
 
 async function showPaymentMenu(
@@ -1131,10 +1098,10 @@ async function showPaymentMenu(
   tableId: string,
   serviceFeePercent: number,
   currency: string,
+  logoUrl: string,
   supabase: any,
   messageId: number
 ) {
-  // Check if there is an active bill
   const { data: bill } = await supabase
     .from('bills')
     .select('id, total_amount')
@@ -1144,13 +1111,9 @@ async function showPaymentMenu(
 
   if (!bill) {
     const text = getT(lang, 'noActiveBill')
-    await sendTelegramApi(token, 'editMessageText', {
-      chat_id: chatId,
-      message_id: messageId,
-      text,
-      parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: [[{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]] }
-    })
+    await sendOrEditPhotoMessage(token, chatId, logoUrl, text, {
+      inline_keyboard: [[{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]]
+    }, messageId)
     return
   }
 
@@ -1169,13 +1132,7 @@ async function showPaymentMenu(
     ]
   ]
 
-  await sendTelegramApi(token, 'editMessageText', {
-    chat_id: chatId,
-    message_id: messageId,
-    text,
-    parse_mode: 'HTML',
-    reply_markup: { inline_keyboard: inlineKeyboard }
-  })
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, text, { inline_keyboard: inlineKeyboard }, messageId)
 }
 
 async function handlePaymentRequest(
@@ -1186,10 +1143,10 @@ async function handlePaymentRequest(
   lang: string,
   serviceFeePercent: number,
   currency: string,
+  logoUrl: string,
   supabase: any,
   messageId: number
 ) {
-  // Get active bill
   const { data: bill } = await supabase
     .from('bills')
     .select('id, total_amount')
@@ -1199,7 +1156,6 @@ async function handlePaymentRequest(
 
   if (!bill) return
 
-  // Create Service Request of type 'bill'
   const note = `Ödeme Yöntemi: ${method === 'cash' ? 'Nakit' : 'Kredi Kartı'}`
   const { error } = await supabase
     .from('service_requests')
@@ -1219,7 +1175,6 @@ async function handlePaymentRequest(
     return
   }
 
-  // Notify Cashier Staff
   const branchName = session.tables?.branches?.name || 'Gusto Lounge'
   const tableName = session.tables?.name || 'Masa'
   const customerName = session.customer_name || 'Müşteri'
@@ -1235,25 +1190,12 @@ async function handlePaymentRequest(
   const { sendTelegramNotification } = await import('@/lib/telegram')
   await sendTelegramNotification(alertMessage)
 
-  // Reply success to user
   const successText = getT(lang, 'paymentRequestSent')
 
-  await sendTelegramApi(token, 'editMessageText', {
-    chat_id: chatId,
-    message_id: messageId,
-    text: successText,
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]
-      ]
-    }
-  })
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, successText, {
+    inline_keyboard: [[{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]]
+  }, messageId)
 }
-
-// ----------------------------------------------------
-// MINI DATABASE ACTIONS IMPLEMENTED IN Webhook Handler
-// ----------------------------------------------------
 
 function supabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
