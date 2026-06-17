@@ -45,7 +45,20 @@ const botTranslations: Record<string, Record<string, string>> = {
     paymentRequestSent: '✅ Ödeme talebiniz iletildi. Garsonumuz hesap süetiniz ile masanıza geliyor.',
     noActiveBill: 'Masaya ait henüz aktif adisyon bulunmuyor. Önce sipariş vermelisiniz.',
     invalidSession: '⚠️ Oturumunuz geçersiz. Lütfen masadaki QR kodu tekrar okutun.',
-    btnNutrition: 'ℹ️ Detay & Kalori'
+    btnNutrition: 'ℹ️ Detay & Kalori',
+    btnViewOrder: '📋 Siparişimi Gör',
+    btnNewOrder: '➕ Yeni Sipariş Ekle',
+    btnCancelOrder: '❌ Siparişi İptal Et',
+    btnCallWaiterChange: '🔔 Değişiklik için Garson Çağır',
+    orderViewTitle: '📋 <b>Sipariş Durumu</b>',
+    orderStatus_new: '⏳ Sırada Bekliyor',
+    orderStatus_preparing: '👨‍🍳 Mutfakta Hazırlanıyor',
+    orderStatus_ready: '🍽️ Hazır — Garson Getiriyor',
+    orderStatus_delivered: '✅ Teslim Edildi',
+    orderStatus_cancelled: '❌ İptal Edildi',
+    orderCancelled: '✅ Siparişiniz iptal edildi. İsterseniz yeni sipariş verebilirsiniz.',
+    orderCancelError: '⚠️ Bu sipariş artık iptal edilemiyor. Değişiklik için garson çağırın.',
+    orderCancelWindowPassed: '⌛ İptal süresi doldu. Değişiklik için garson çağırın.'
   },
   en: {
     welcome: '🍽️ <b>{branchName}</b>\n━━━━━━━━━━━━━━━━━\nWelcome! Order and service bot for <b>{tableName}</b> is active.',
@@ -85,7 +98,20 @@ const botTranslations: Record<string, Record<string, string>> = {
     paymentRequestSent: '✅ Payment request sent. Staff will attend to you shortly.',
     noActiveBill: 'No active bill found for this table. Place an order first.',
     invalidSession: '⚠️ Session expired or invalid. Please scan the QR code again.',
-    btnNutrition: 'ℹ️ Details & Macros'
+    btnNutrition: 'ℹ️ Details & Macros',
+    btnViewOrder: '📋 View My Order',
+    btnNewOrder: '➕ Add More Items',
+    btnCancelOrder: '❌ Cancel Order',
+    btnCallWaiterChange: '🔔 Call Waiter for Changes',
+    orderViewTitle: '📋 <b>Order Status</b>',
+    orderStatus_new: '⏳ Waiting in Queue',
+    orderStatus_preparing: '👨‍🍳 Being Prepared',
+    orderStatus_ready: '🍽️ Ready — Waiter Bringing It',
+    orderStatus_delivered: '✅ Delivered',
+    orderStatus_cancelled: '❌ Cancelled',
+    orderCancelled: '✅ Your order has been cancelled. You can place a new order.',
+    orderCancelError: '⚠️ This order can no longer be cancelled. Call a waiter for changes.',
+    orderCancelWindowPassed: '⌛ Cancellation window has passed. Call a waiter for changes.'
   },
   ru: {
     welcome: '🍽️ <b>{branchName}</b>\n━━━━━━━━━━━━━━━━━\nДобро пожаловать! Бот заказа и сервиса для <b>{tableName}</b> активен.',
@@ -125,7 +151,20 @@ const botTranslations: Record<string, Record<string, string>> = {
     paymentRequestSent: '✅ Запрос оплаты отправлен. Официант скоро подойдет.',
     noActiveBill: 'Нет активного счета для этого стола. Сначала сделайте заказ.',
     invalidSession: '⚠️ Сессия устарела. Пожалуйста, отсканируйте QR-код еще раз.',
-    btnNutrition: 'ℹ️ Детали и калории'
+    btnNutrition: 'ℹ️ Детали и калории',
+    btnViewOrder: '📋 Мой заказ',
+    btnNewOrder: '➕ Ещё заказать',
+    btnCancelOrder: '❌ Отменить заказ',
+    btnCallWaiterChange: '🔔 Вызвать официанта для изменений',
+    orderViewTitle: '📋 <b>Статус заказа</b>',
+    orderStatus_new: '⏳ В очереди',
+    orderStatus_preparing: '👨‍🍳 Готовится',
+    orderStatus_ready: '🍽️ Готов — официант несёт',
+    orderStatus_delivered: '✅ Доставлен',
+    orderStatus_cancelled: '❌ Отменён',
+    orderCancelled: '✅ Ваш заказ отменён. Можете сделать новый.',
+    orderCancelError: '⚠️ Заказ больше нельзя отменить. Вызовите официанта.',
+    orderCancelWindowPassed: '⌛ Время отмены истекло. Вызовите официанта.'
   },
   ka: {
     welcome: '🍽️ <b>{branchName}</b>\n━━━━━━━━━━━━━━━━━\nმოგესალმებით! შეკვეთისა და სერვისის ბოტი მაგიდისთვის <b>{tableName}</b> აქტიურია.',
@@ -165,7 +204,20 @@ const botTranslations: Record<string, Record<string, string>> = {
     paymentRequestSent: '✅ გადახდის მოთხოვნა გაგზავნილია. ოფიციანტი მალე მოვა.',
     noActiveBill: 'მაგიდისთვის აქტიური ანგარიში ვერ მოიძებნა. ჯერ შეუკვეთეთ.',
     invalidSession: '⚠️ სესია გაუქმებულია. გთხოვთ თავიდან დაასკანეროთ QR კოდი.',
-    btnNutrition: 'ℹ️ დეტალები და კალორიები'
+    btnNutrition: 'ℹ️ დეტალები და კალორიები',
+    btnViewOrder: '📋 ჩემი შეკვეთა',
+    btnNewOrder: '➕ კიდევ შეუკვეთე',
+    btnCancelOrder: '❌ შეკვეთის გაუქმება',
+    btnCallWaiterChange: '🔔 ოფიციანტის გამოძახება ცვლილებისთვის',
+    orderViewTitle: '📋 <b>შეკვეთის სტატუსი</b>',
+    orderStatus_new: '⏳ რიგში ელოდება',
+    orderStatus_preparing: '👨‍🍳 მზადდება',
+    orderStatus_ready: '🍽️ მზად — ოფიციანტი მოაქვს',
+    orderStatus_delivered: '✅ ჩაბარდა',
+    orderStatus_cancelled: '❌ გაუქმდა',
+    orderCancelled: '✅ თქვენი შეკვეთა გაუქმდა. შეგიძლიათ ახალი გააკეთოთ.',
+    orderCancelError: '⚠️ ამ შეკვეთის გაუქმება შეუძლებელია. ოფიციანტს დაუძახეთ.',
+    orderCancelWindowPassed: '⌛ გაუქმების დრო გავიდა. ოფიციანტს დაუძახეთ.'
   }
 }
 
@@ -457,7 +509,17 @@ export async function POST(request: Request) {
           await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
           await handleConfirmOrder(token, chatId, session, cart, branchId, currency, serviceFeePercent, logoUrl, supabase, messageId)
         }
-      } 
+      }
+      else if (action === 'order' && param.startsWith('view:')) {
+        const orderId = param.replace('view:', '')
+        await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
+        await handleOrderView(token, chatId, orderId, lang, currency, logoUrl, supabase, messageId)
+      }
+      else if (action === 'order' && param.startsWith('cancel:')) {
+        const orderId = param.replace('cancel:', '')
+        await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
+        await handleOrderCancel(token, chatId, orderId, lang, currency, logoUrl, supabase, messageId)
+      }
       else if (action === 'srv') {
         const type = param
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
@@ -943,6 +1005,8 @@ async function handleConfirmOrder(
     })
   })
 
+  const cancelWindowEndsAt = new Date(Date.now() + 2 * 60 * 1000).toISOString()
+
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .insert({
@@ -952,6 +1016,7 @@ async function handleConfirmOrder(
       session_id: session.id,
       status: 'new',
       total_amount: orderTotal,
+      cancel_window_ends_at: cancelWindowEndsAt,
       customer_note: 'Telegram üzerinden sipariş edildi.'
     })
     .select('id')
@@ -1007,36 +1072,173 @@ async function handleConfirmOrder(
     .update({ cart: {} })
     .eq('id', session.id)
 
+  const lang = session.language || 'tr'
   const branchName = session.tables?.branches?.name || 'Gusto Lounge'
   const tableName = session.tables?.name || 'Masa'
   const customerName = session.customer_name || 'Müşteri'
+  const orderIdShort = order.id.slice(0, 8).toUpperCase()
 
-  let itemsHtml = ''
+  // Mutfak/garson bildirimi — kısa ve net
+  let kitchenItemsHtml = ''
   products.forEach((prod: any) => {
     const qty = cart[prod.id] || 0
-    const name = prod.name_tr || prod.name_en || 'Ürün'
-    itemsHtml += `• ${qty}x <b>${escapeHtml(name)}</b> - ${(qty * Number(prod.base_price)).toFixed(2)} ${currency}\n`
+    kitchenItemsHtml += `  • ${qty}x ${prod.name_tr || prod.name_en || 'Ürün'} — ${(qty * Number(prod.base_price)).toFixed(2)} ${currency}\n`
   })
 
-  const alertMessage = `📦 <b>YENİ SİPARİŞ (Telegram Chat)!</b>
+  const alertMessage = `🔔 <b>YENİ SİPARİŞ</b> — #${orderIdShort}
+🎯 ${escapeHtml(tableName)} | 👤 ${escapeHtml(customerName)}
 ━━━━━━━━━━━━━━━━━
-🏢 <b>Şube:</b> ${escapeHtml(branchName)}
-🎯 <b>Masa:</b> ${escapeHtml(tableName)}
-👤 <b>Müşteri:</b> ${escapeHtml(customerName)} (Telegram Chat)
-🔢 <b>Sipariş ID:</b> <code>#${order.id.slice(0, 8).toUpperCase()}</code>
-━━━━━━━━━━━━━━━━━
-🛒 <b>Ürünler:</b>
-${itemsHtml}━━━━━━━━━━━━━━━━━
-💰 <b>Toplam Tutar:</b> <b>${finalTotal.toFixed(2)} ${currency}</b>`
+${kitchenItemsHtml}━━━━━━━━━━━━━━━━━
+💰 Toplam: <b>${finalTotal.toFixed(2)} ${currency}</b>`
 
   const { sendTelegramNotification } = await import('@/lib/telegram')
   await sendTelegramNotification(alertMessage)
 
-  const orderIdShort = order.id.slice(0, 8).toUpperCase()
-  const successText = getT(session.language || 'tr', 'orderConfirmed', { orderId: orderIdShort })
+  // Müşteri onay mesajı — samimi ve detaylı
+  let custItemsHtml = ''
+  products.forEach((prod: any) => {
+    const qty = cart[prod.id] || 0
+    const name = prod[`name_${lang}`] || prod.name_tr || prod.name_en || 'Ürün'
+    custItemsHtml += `• ${qty}x <b>${escapeHtml(name)}</b> — ${(qty * Number(prod.base_price)).toFixed(2)} ${currency}\n`
+  })
 
-  await sendOrEditPhotoMessage(token, chatId, logoUrl, successText, {
-    inline_keyboard: [[{ text: getT(session.language || 'tr', 'btnBackMenu'), callback_data: 'menu:main' }]]
+  const custConfirmText =
+lang === 'en'
+  ? `✅ <b>Order received!</b>\n━━━━━━━━━━━━━━━━━\nOrder #<code>${orderIdShort}</code>\n\n${custItemsHtml}\n💰 <b>Total:</b> ${finalTotal.toFixed(2)} ${currency}\n━━━━━━━━━━━━━━━━━\nWe'll notify you when the kitchen starts preparing your order 🍳`
+  : lang === 'ru'
+  ? `✅ <b>Заказ принят!</b>\n━━━━━━━━━━━━━━━━━\nЗаказ #<code>${orderIdShort}</code>\n\n${custItemsHtml}\n💰 <b>Итого:</b> ${finalTotal.toFixed(2)} ${currency}\n━━━━━━━━━━━━━━━━━\nМы сообщим, когда кухня начнёт готовить 🍳`
+  : lang === 'ka'
+  ? `✅ <b>შეკვეთა მიღებულია!</b>\n━━━━━━━━━━━━━━━━━\nშეკვეთა #<code>${orderIdShort}</code>\n\n${custItemsHtml}\n💰 <b>სულ:</b> ${finalTotal.toFixed(2)} ${currency}\n━━━━━━━━━━━━━━━━━\nგაცნობებთ, როდესაც სამზარეულო მოამზადებს 🍳`
+  : `✅ <b>Siparişiniz alındı!</b>\n━━━━━━━━━━━━━━━━━\nSipariş #<code>${orderIdShort}</code>\n\n${custItemsHtml}\n💰 <b>Toplam:</b> ${finalTotal.toFixed(2)} ${currency}\n━━━━━━━━━━━━━━━━━\nMutfağımız hazırlamaya başlayınca haber vereceğiz 🍳`
+
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, custConfirmText, {
+    inline_keyboard: [
+      [
+        { text: getT(lang, 'btnViewOrder'), callback_data: `order:view:${order.id}` },
+        { text: getT(lang, 'btnNewOrder'), callback_data: 'menu:cats' }
+      ],
+      [
+        { text: getT(lang, 'btnService'), callback_data: 'menu:service' },
+        { text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }
+      ]
+    ]
+  }, messageId)
+}
+
+async function handleOrderView(
+  token: string,
+  chatId: number,
+  orderId: string,
+  lang: string,
+  currency: string,
+  logoUrl: string,
+  supabase: any,
+  messageId: number
+) {
+  const { data: order } = await supabase
+    .from('orders')
+    .select('id, status, total_amount, cancel_window_ends_at, order_items(quantity, unit_price, products(name_tr, name_en, name_ru, name_ka))')
+    .eq('id', orderId)
+    .single()
+
+  if (!order) {
+    await sendOrEditPhotoMessage(token, chatId, logoUrl, '⚠️ Sipariş bulunamadı.', {
+      inline_keyboard: [[{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]]
+    }, messageId)
+    return
+  }
+
+  const statusKey = `orderStatus_${order.status}` as string
+  const statusLabel = getT(lang, statusKey) || order.status
+
+  let itemsHtml = ''
+  order.order_items?.forEach((item: any) => {
+    const name = item.products?.[`name_${lang}`] || item.products?.name_tr || 'Ürün'
+    const total = (Number(item.unit_price) * Number(item.quantity)).toFixed(2)
+    itemsHtml += `• ${item.quantity}x <b>${escapeHtml(name)}</b> — ${total} ${currency}\n`
+  })
+
+  const title = getT(lang, 'orderViewTitle')
+  const orderIdShort = orderId.slice(0, 8).toUpperCase()
+  const text = `${title}\n━━━━━━━━━━━━━━━━━\n#<code>${orderIdShort}</code>  •  <b>${statusLabel}</b>\n\n${itemsHtml}\n💰 <b>${Number(order.total_amount).toFixed(2)} ${currency}</b>`
+
+  const buttons: any[][] = []
+
+  const now = new Date()
+  const cancelWindow = order.cancel_window_ends_at ? new Date(order.cancel_window_ends_at) : null
+  if (order.status === 'new' && cancelWindow && now < cancelWindow) {
+    buttons.push([{ text: getT(lang, 'btnCancelOrder'), callback_data: `order:cancel:${orderId}` }])
+  } else if (order.status === 'new' || order.status === 'preparing') {
+    buttons.push([{ text: getT(lang, 'btnCallWaiterChange'), callback_data: 'menu:service' }])
+  }
+
+  buttons.push([
+    { text: getT(lang, 'btnNewOrder'), callback_data: 'menu:cats' },
+    { text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }
+  ])
+
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, text, { inline_keyboard: buttons }, messageId)
+}
+
+async function handleOrderCancel(
+  token: string,
+  chatId: number,
+  orderId: string,
+  lang: string,
+  currency: string,
+  logoUrl: string,
+  supabase: any,
+  messageId: number
+) {
+  const { data: order } = await supabase
+    .from('orders')
+    .select('id, status, total_amount, bill_id, cancel_window_ends_at')
+    .eq('id', orderId)
+    .single()
+
+  if (!order || order.status !== 'new') {
+    await sendOrEditPhotoMessage(token, chatId, logoUrl, getT(lang, 'orderCancelError'), {
+      inline_keyboard: [
+        [{ text: getT(lang, 'btnCallWaiterChange'), callback_data: 'menu:service' }],
+        [{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]
+      ]
+    }, messageId)
+    return
+  }
+
+  const now = new Date()
+  const cancelWindow = order.cancel_window_ends_at ? new Date(order.cancel_window_ends_at) : null
+  if (cancelWindow && now >= cancelWindow) {
+    await sendOrEditPhotoMessage(token, chatId, logoUrl, getT(lang, 'orderCancelWindowPassed'), {
+      inline_keyboard: [
+        [{ text: getT(lang, 'btnCallWaiterChange'), callback_data: 'menu:service' }],
+        [{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]
+      ]
+    }, messageId)
+    return
+  }
+
+  await supabase.from('orders').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', orderId)
+  await supabase.from('order_items').update({ status: 'cancelled' }).eq('order_id', orderId)
+
+  // Adisyon toplamını güncelle
+  const { data: remainingOrders } = await supabase
+    .from('orders')
+    .select('total_amount')
+    .eq('bill_id', order.bill_id)
+    .neq('status', 'cancelled')
+
+  let newTotal = 0
+  remainingOrders?.forEach((o: any) => { newTotal += Number(o.total_amount) })
+  await supabase.from('bills').update({ total_amount: newTotal }).eq('id', order.bill_id)
+
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, getT(lang, 'orderCancelled'), {
+    inline_keyboard: [
+      [
+        { text: getT(lang, 'btnNewOrder'), callback_data: 'menu:cats' },
+        { text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }
+      ]
+    ]
   }, messageId)
 }
 

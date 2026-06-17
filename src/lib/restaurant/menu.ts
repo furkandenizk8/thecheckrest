@@ -24,6 +24,7 @@ export interface MenuCategory {
   id: string
   name: string
   sort_order: number
+  photo_url?: string | null
 }
 
 /**
@@ -167,7 +168,8 @@ export async function fetchBranchMenu(
     return {
       id: cat.id,
       name,
-      sort_order: cat.sort_order || 0
+      sort_order: cat.sort_order || 0,
+      photo_url: cat.photo_url || null,
     }
   })
 

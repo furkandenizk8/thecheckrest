@@ -50,7 +50,10 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
     openBills: any[]
     activeRequests: any[]
     activeOrders: any[]
-  }>({ tables: [], activeSessions: [], openBills: [], activeRequests: [], activeOrders: [] })
+    stations: any[]
+  }>({ tables: [], activeSessions: [], openBills: [], activeRequests: [], activeOrders: [], stations: [] })
+
+  const [selectedStationId, setSelectedStationId] = useState<string>('all')
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -152,7 +155,9 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tables',           filter: `branch_id=eq.${selectedBranchId}` }, reload)
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    const intervalId = setInterval(() => loadDashboardData(false), 15000)
+
+    return () => { supabase.removeChannel(channel); clearInterval(intervalId) }
   }, [selectedBranchId, loadDashboardData, supabase])
 
   const selectedTable = data.tables.find(t => t.id === selectedTableId)
@@ -422,128 +427,206 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
               )}
 
               {/* Tab 2: Kitchen Panel */}
-              {activeTab === 'kitchen' && (
-                <div className="space-y-6">
-                  <div>
-                    <h2 className="text-lg font-bold text-zinc-100">Mutfak Hazırlık Paneli</h2>
-                    <p className="text-xs text-zinc-500">Sipariş alın, hazırlayın ve garsona iletin</p>
-                  </div>
-
-                  {data.activeOrders.length === 0 ? (
-                    <div className="bg-zinc-900/20 border border-zinc-900/60 rounded-3xl p-12 text-center text-zinc-500 max-w-lg mx-auto mt-6">
-                      <ChefHat className="w-10 h-10 mx-auto text-zinc-700 mb-3" />
-                      <div className="text-xs font-bold">Aktif Sipariş Yok</div>
-                      <p className="text-[10px] text-zinc-600 mt-1">Şu anda hazırlanması gereken bir sipariş bulunmuyor.</p>
+              {activeTab === 'kitchen' && (() => {
+                const ST_COLOR: Record<string, string> = {
+                  amber:   'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                  sky:     'bg-sky-500/10 text-sky-400 border-sky-500/20',
+                  emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                  rose:    'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                  violet:  'bg-violet-500/10 text-violet-400 border-violet-500/20',
+                }
+                const ST_COLOR_ACTIVE: Record<string, string> = {
+                  amber:   'bg-amber-500/20 text-amber-400 border-amber-500/30',
+                  sky:     'bg-sky-500/20 text-sky-400 border-sky-500/30',
+                  emerald: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+                  rose:    'bg-rose-500/20 text-rose-400 border-rose-500/30',
+                  violet:  'bg-violet-500/20 text-violet-400 border-violet-500/30',
+                }
+                const kitchenOrders = data.activeOrders.filter(order =>
+                  selectedStationId === 'all' ||
+                  order.order_items?.some((item: any) =>
+                    item.products?.categories?.station_id === selectedStationId
+                  )
+                )
+                return (
+                  <div className="space-y-6">
+                    <div>
+                      <h2 className="text-lg font-bold text-zinc-100">Mutfak Hazırlık Paneli</h2>
+                      <p className="text-xs text-zinc-500">Sipariş alın, hazırlayın ve garsona iletin</p>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {data.activeOrders.map(order => {
-                        const table = data.tables.find(t => t.id === order.table_id)
-                        const session = data.activeSessions.find(s => s.id === order.session_id)
-                        const timeStr = new Date(order.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
-                        const isNew = order.status === 'new'
-                        const isReady = order.status === 'ready'
 
-                        return (
-                          <div key={order.id} className={`rounded-3xl p-5 shadow-xl space-y-4 border ${
-                            isNew    ? 'bg-orange-950/20 border-orange-800/30' :
-                            isReady  ? 'bg-emerald-950/20 border-emerald-800/30' :
-                                       'bg-zinc-900/40 border-zinc-850'
-                          }`}>
-                            <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
-                              <div>
-                                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                                  <span>{table?.name || 'Masa'}</span>
-                                  <span className="text-[10px] text-zinc-500 font-medium">• {session?.customer_name || 'Müşteri'}</span>
-                                </div>
-                                <div className="text-[9px] text-zinc-500 flex items-center gap-1 mt-0.5">
-                                  <Clock className="w-3 h-3" /> {timeStr}
-                                </div>
-                              </div>
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${
-                                isNew   ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                                isReady ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                          'bg-sky-500/10 text-sky-400 border-sky-500/20'
-                              }`}>
-                                {isNew ? '🆕 Yeni' : isReady ? '✅ Hazır' : '⏳ Hazırlanıyor'}
-                              </span>
-                            </div>
+                    {/* Station filter pills */}
+                    {data.stations.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => setSelectedStationId('all')}
+                          className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition ${
+                            selectedStationId === 'all'
+                              ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                              : 'bg-zinc-900/40 text-zinc-500 border-zinc-800 hover:text-zinc-300'
+                          }`}
+                        >
+                          Tümü ({data.activeOrders.length})
+                        </button>
+                        {data.stations.map((st: any) => {
+                          const count = data.activeOrders.filter(o =>
+                            o.order_items?.some((item: any) =>
+                              item.products?.categories?.station_id === st.id
+                            )
+                          ).length
+                          const isActive = selectedStationId === st.id
+                          return (
+                            <button
+                              key={st.id}
+                              onClick={() => setSelectedStationId(st.id)}
+                              className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition ${
+                                isActive
+                                  ? (ST_COLOR_ACTIVE[st.color] || ST_COLOR_ACTIVE.amber)
+                                  : 'bg-zinc-900/40 text-zinc-500 border-zinc-800 hover:text-zinc-300'
+                              }`}
+                            >
+                              {st.name}{count > 0 ? ` (${count})` : ''}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
 
-                            {/* Order Items */}
-                            <div className="space-y-2">
-                              {order.order_items?.map((item: any) => {
-                                const prodName = item.products?.name_tr || item.products?.name_en || 'Ürün'
-                                return (
-                                  <div key={item.id} className="flex items-center justify-between text-xs py-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-bold text-amber-400">{item.quantity}x</span>
-                                      <span className="text-zinc-300 font-medium">{prodName}</span>
-                                      {item.chef_note && (
-                                        <span className="text-[9px] text-zinc-500 italic">({item.chef_note})</span>
-                                      )}
-                                    </div>
-                                    <div>
-                                      {item.status === 'pending' && (
-                                        <button
-                                          onClick={() => handleUpdateOrderItemStatus(item.id, 'preparing')}
-                                          className="px-2 py-1 rounded-lg bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-orange-400 hover:border-orange-500/30 transition text-[10px] font-bold"
-                                        >
-                                          Başla
-                                        </button>
-                                      )}
-                                      {item.status === 'preparing' && (
-                                        <button
-                                          onClick={() => handleUpdateOrderItemStatus(item.id, 'ready')}
-                                          className="px-2 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/20 transition text-[10px] font-bold"
-                                        >
-                                          Hazır
-                                        </button>
-                                      )}
-                                      {item.status === 'ready' && (
-                                        <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-0.5">
-                                          <Check className="w-3 h-3" /> Hazır
-                                        </span>
-                                      )}
-                                      {item.status === 'delivered' && (
-                                        <span className="text-zinc-600 text-[10px] font-bold">✓ Teslim</span>
-                                      )}
-                                    </div>
+                    {kitchenOrders.length === 0 ? (
+                      <div className="bg-zinc-900/20 border border-zinc-900/60 rounded-3xl p-12 text-center text-zinc-500 max-w-lg mx-auto mt-6">
+                        <ChefHat className="w-10 h-10 mx-auto text-zinc-700 mb-3" />
+                        <div className="text-xs font-bold">
+                          {selectedStationId === 'all' ? 'Aktif Sipariş Yok' : 'Bu Birimde Sipariş Yok'}
+                        </div>
+                        <p className="text-[10px] text-zinc-600 mt-1">
+                          {selectedStationId === 'all'
+                            ? 'Şu anda hazırlanması gereken bir sipariş bulunmuyor.'
+                            : 'Bu birime ait aktif sipariş yok.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {kitchenOrders.map(order => {
+                          const table = data.tables.find(t => t.id === order.table_id)
+                          const session = data.activeSessions.find(s => s.id === order.session_id)
+                          const timeStr = new Date(order.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+                          const isNew = order.status === 'new'
+                          const isReady = order.status === 'ready'
+                          const orderStations: any[] = Array.from(
+                            new Map(
+                              order.order_items
+                                ?.map((item: any) => item.products?.categories?.stations)
+                                .filter(Boolean)
+                                .map((s: any) => [s.id, s])
+                            ).values()
+                          )
+
+                          return (
+                            <div key={order.id} className={`rounded-3xl p-5 shadow-xl space-y-4 border ${
+                              isNew    ? 'bg-orange-950/20 border-orange-800/30' :
+                              isReady  ? 'bg-emerald-950/20 border-emerald-800/30' :
+                                         'bg-zinc-900/40 border-zinc-850'
+                            }`}>
+                              <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
+                                <div>
+                                  <div className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
+                                    <span>{table?.name || 'Masa'}</span>
+                                    <span className="text-[10px] text-zinc-500 font-medium">• {session?.customer_name || 'Müşteri'}</span>
+                                    {orderStations.map((st: any) => (
+                                      <span key={st.id} className={`px-1.5 py-0.5 rounded-full text-[9px] font-black border ${ST_COLOR[st.color] || ST_COLOR.amber}`}>
+                                        {st.name}
+                                      </span>
+                                    ))}
                                   </div>
-                                )
-                              })}
-                            </div>
-
-                            {/* Order-level action buttons */}
-                            <div className="pt-3 border-t border-zinc-800/60 flex gap-2">
-                              {isNew && (
-                                <button
-                                  onClick={() => handleUpdateOrderStatus(order.id, 'preparing')}
-                                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold py-2.5 rounded-xl transition"
-                                >
-                                  👨‍🍳 Aldım — Hazırlanıyor
-                                </button>
-                              )}
-                              {order.status === 'preparing' && (
-                                <button
-                                  onClick={() => handleUpdateOrderStatus(order.id, 'ready')}
-                                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold py-2.5 rounded-xl transition"
-                                >
-                                  🍽 Hazır — Garsona Bildir
-                                </button>
-                              )}
-                              {isReady && (
-                                <div className="flex-1 text-center text-[10px] text-emerald-400 font-bold py-2.5">
-                                  📨 Garson bildirildi, teslim bekleniyor...
+                                  <div className="text-[9px] text-zinc-500 flex items-center gap-1 mt-0.5">
+                                    <Clock className="w-3 h-3" /> {timeStr}
+                                  </div>
                                 </div>
-                              )}
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${
+                                  isNew   ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                                  isReady ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                            'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                                }`}>
+                                  {isNew ? '🆕 Yeni' : isReady ? '✅ Hazır' : '⏳ Hazırlanıyor'}
+                                </span>
+                              </div>
+
+                              {/* Order Items */}
+                              <div className="space-y-2">
+                                {order.order_items?.map((item: any) => {
+                                  const prodName = item.products?.name_tr || item.products?.name_en || 'Ürün'
+                                  return (
+                                    <div key={item.id} className="flex items-center justify-between text-xs py-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-bold text-amber-400">{item.quantity}x</span>
+                                        <span className="text-zinc-300 font-medium">{prodName}</span>
+                                        {item.chef_note && (
+                                          <span className="text-[9px] text-zinc-500 italic">({item.chef_note})</span>
+                                        )}
+                                      </div>
+                                      <div>
+                                        {item.status === 'pending' && (
+                                          <button
+                                            onClick={() => handleUpdateOrderItemStatus(item.id, 'preparing')}
+                                            className="px-2 py-1 rounded-lg bg-zinc-850 border border-zinc-800 text-zinc-400 hover:text-orange-400 hover:border-orange-500/30 transition text-[10px] font-bold"
+                                          >
+                                            Başla
+                                          </button>
+                                        )}
+                                        {item.status === 'preparing' && (
+                                          <button
+                                            onClick={() => handleUpdateOrderItemStatus(item.id, 'ready')}
+                                            className="px-2 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 hover:bg-emerald-500/10 hover:text-emerald-400 hover:border-emerald-500/20 transition text-[10px] font-bold"
+                                          >
+                                            Hazır
+                                          </button>
+                                        )}
+                                        {item.status === 'ready' && (
+                                          <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-0.5">
+                                            <Check className="w-3 h-3" /> Hazır
+                                          </span>
+                                        )}
+                                        {item.status === 'delivered' && (
+                                          <span className="text-zinc-600 text-[10px] font-bold">✓ Teslim</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+
+                              {/* Order-level action buttons */}
+                              <div className="pt-3 border-t border-zinc-800/60 flex gap-2">
+                                {isNew && (
+                                  <button
+                                    onClick={() => handleUpdateOrderStatus(order.id, 'preparing')}
+                                    className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-[11px] font-bold py-2.5 rounded-xl transition"
+                                  >
+                                    👨‍🍳 Aldım — Hazırlanıyor
+                                  </button>
+                                )}
+                                {order.status === 'preparing' && (
+                                  <button
+                                    onClick={() => handleUpdateOrderStatus(order.id, 'ready')}
+                                    className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold py-2.5 rounded-xl transition"
+                                  >
+                                    🍽 Hazır — Garsona Bildir
+                                  </button>
+                                )}
+                                {isReady && (
+                                  <div className="flex-1 text-center text-[10px] text-emerald-400 font-bold py-2.5">
+                                    📨 Garson bildirildi, teslim bekleniyor...
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Tab 3: Service Requests */}
               {activeTab === 'requests' && (

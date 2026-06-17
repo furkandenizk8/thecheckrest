@@ -27,7 +27,9 @@ import {
   ToggleRight,
   Loader2,
   Languages,
+  Image,
 } from 'lucide-react'
+import { ImageUpload } from './ImageUpload'
 
 async function autoTranslate(text: string): Promise<{ en: string; ka: string; ru: string } | null> {
   if (!text.trim()) return null
@@ -53,6 +55,7 @@ interface Category {
   sort_order: number
   is_active: boolean
   station_id?: string | null
+  photo_url?: string | null
 }
 
 interface Product {
@@ -68,6 +71,7 @@ interface Product {
   allergens: string[]
   is_active: boolean
   sort_order: number
+  photo_url?: string | null
   categories: { id: string; name_tr: string } | null
   branch_settings: { custom_price: number | null; is_active: boolean; stock_count: number | null } | null
 }
@@ -108,6 +112,7 @@ function ProductModal({
     custom_price:     product?.branch_settings?.custom_price?.toString() ?? '',
     stock_count:      product?.branch_settings?.stock_count?.toString() ?? '',
     branch_active:    product?.branch_settings?.is_active ?? true,
+    photo_url:        product?.photo_url ?? '',
   })
 
   const set = (key: keyof typeof form, value: any) => setForm(f => ({ ...f, [key]: value }))
@@ -154,6 +159,7 @@ function ProductModal({
         custom_price:     form.custom_price ? Number(form.custom_price) : null,
         stock_count:      form.stock_count ? Number(form.stock_count) : null,
         branch_active:    form.branch_active,
+        photo_url:        form.photo_url.trim() || null,
       }
 
       let res: any
@@ -233,6 +239,13 @@ function ProductModal({
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none transition resize-none"
               placeholder="Kısa ürün açıklaması..." />
           </div>
+
+          {/* Photo Upload */}
+          <ImageUpload
+            value={form.photo_url}
+            onChange={url => set('photo_url', url)}
+            label="Ürün Fotoğrafı"
+          />
 
           {/* Category + Price */}
           <div className="grid grid-cols-2 gap-3">
@@ -346,6 +359,7 @@ function CategoryModal({
 }) {
   const [names, setNames] = useState({ tr: category?.name_tr ?? '', en: '', ka: '', ru: '' })
   const [stationId, setStationId] = useState<string>(category?.station_id ?? '')
+  const [photoUrl, setPhotoUrl] = useState<string>(category?.photo_url ?? '')
   const [saving, setSaving] = useState(false)
   const [translating, setTranslating] = useState(false)
   const [error, setError] = useState('')
@@ -370,6 +384,7 @@ function CategoryModal({
         name_ka: names.ka || names.tr,
         name_ru: names.ru || names.tr,
         station_id: stationId || null,
+        photo_url: photoUrl.trim() || null,
       }
       let res: any
       if (category) {
@@ -433,6 +448,14 @@ function CategoryModal({
               </select>
             </div>
           )}
+
+          {/* Kategori Fotoğrafı */}
+          <ImageUpload
+            value={photoUrl}
+            onChange={setPhotoUrl}
+            label="Kategori Fotoğrafı"
+          />
+
           {error && <div className="p-3 bg-red-950/20 border border-red-900/30 text-red-400 rounded-xl text-xs">{error}</div>}
           <div className="flex gap-2">
             <button type="button" onClick={onClose}
@@ -611,7 +634,16 @@ export default function MenuManagement({ embedded }: { embedded?: boolean }) {
                           isActive ? 'border-zinc-800 hover:border-zinc-700' : 'border-zinc-900 opacity-50'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-3">
+                          {/* Foto thumbnail */}
+                          <div className="w-14 h-14 shrink-0 rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900 flex items-center justify-center">
+                            {product.photo_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={product.photo_url} alt={product.name_tr} className="w-full h-full object-cover" />
+                            ) : (
+                              <Image className="w-5 h-5 text-zinc-700" />
+                            )}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-bold text-white truncate">{product.name_tr}</div>
                             <div className="text-[9px] text-zinc-500 mt-0.5">{product.categories?.name_tr}</div>

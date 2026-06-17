@@ -241,7 +241,7 @@ export default function SetupDashboard() {
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between text-xs py-1.5 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">SUPABASE_URL</span>
-                    {status.env.hasSupabaseUrl ? (
+                    {status.env?.hasSupabaseUrl ? (
                       <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold border border-emerald-500/20">Yüklendi</span>
                     ) : (
                       <span className="px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 text-[10px] font-semibold border border-red-500/20">Eksik</span>
@@ -249,7 +249,7 @@ export default function SetupDashboard() {
                   </div>
                   <div className="flex items-center justify-between text-xs py-1.5 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">SUPABASE_ANON_KEY</span>
-                    {status.env.hasSupabaseAnon ? (
+                    {status.env?.hasSupabaseAnon ? (
                       <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold border border-emerald-500/20">Yüklendi</span>
                     ) : (
                       <span className="px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 text-[10px] font-semibold border border-red-500/20">Eksik</span>
@@ -257,7 +257,7 @@ export default function SetupDashboard() {
                   </div>
                   <div className="flex items-center justify-between text-xs py-1.5 border-b border-zinc-800/50">
                     <span className="text-zinc-500 font-medium">TELEGRAM_BOT_TOKEN</span>
-                    {status.env.hasBotToken ? (
+                    {status.env?.hasBotToken ? (
                       <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold border border-emerald-500/20">Yüklendi</span>
                     ) : (
                       <span className="px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 text-[10px] font-semibold border border-red-500/20">Eksik</span>
@@ -265,7 +265,7 @@ export default function SetupDashboard() {
                   </div>
                   <div className="flex items-center justify-between text-xs py-1.5">
                     <span className="text-zinc-500 font-medium">TELEGRAM_CHAT_ID</span>
-                    {status.env.hasChatId ? (
+                    {status.env?.hasChatId ? (
                       <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold border border-emerald-500/20">Yüklendi</span>
                     ) : (
                       <span className="px-2 py-0.5 rounded-md bg-red-500/10 text-red-400 text-[10px] font-semibold border border-red-500/20">Eksik</span>
@@ -312,7 +312,7 @@ export default function SetupDashboard() {
                     />
                     <button
                       type="submit"
-                      disabled={webhookLoading || !status?.env.hasBotToken}
+                      disabled={webhookLoading || !status?.env?.hasBotToken}
                       className="bg-sky-500 hover:bg-sky-600 active:scale-[0.98] transition-all duration-300 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-1.5 shrink-0 disabled:opacity-50 disabled:pointer-events-none"
                     >
                       {webhookLoading ? (
@@ -357,7 +357,7 @@ export default function SetupDashboard() {
                   </div>
                   <button
                     onClick={handleSendTestMessage}
-                    disabled={testLoading || !status?.env.hasBotToken || !status?.env.hasChatId}
+                    disabled={testLoading || !status?.env?.hasBotToken || !status?.env?.hasChatId}
                     className="w-full sm:w-auto bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/50 text-zinc-300 text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all disabled:opacity-50"
                   >
                     {testLoading ? (

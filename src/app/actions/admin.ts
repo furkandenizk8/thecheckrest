@@ -145,19 +145,16 @@ export async function getSystemStatus() {
     }
 
     const supabase = createServiceClient()
-    
-    // Get counts
-    const { count: branchCount, error: branchErr } = await supabase
-      .from('branches')
-      .select('*', { count: 'exact', head: true })
-      
-    const { count: tableCount, error: tableErr } = await supabase
-      .from('tables')
-      .select('*', { count: 'exact', head: true })
-      
-    const { count: productCount, error: productErr } = await supabase
-      .from('products')
-      .select('*', { count: 'exact', head: true })
+
+    const [
+      { count: branchCount, error: branchErr },
+      { count: tableCount, error: tableErr },
+      { count: productCount, error: productErr },
+    ] = await Promise.all([
+      supabase.from('branches').select('*', { count: 'exact', head: true }),
+      supabase.from('tables').select('*', { count: 'exact', head: true }),
+      supabase.from('products').select('*', { count: 'exact', head: true }),
+    ])
 
     const dbConnected = !branchErr && !tableErr && !productErr
 
@@ -178,6 +175,13 @@ export async function getSystemStatus() {
   } catch (err: any) {
     return {
       dbConnected: false,
+      counts: { branches: 0, tables: 0, products: 0 },
+      env: {
+        hasBotToken: !!process.env.TELEGRAM_BOT_TOKEN,
+        hasChatId: !!process.env.TELEGRAM_CHAT_ID,
+        hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+        hasSupabaseAnon: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      },
       error: err.message || 'Connection to Supabase failed'
     }
   }
@@ -194,70 +198,75 @@ export async function fetchUnifiedDashboardData(branchId: string) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
 
-  await autoDeliverReadyOrders(supabase, branchId)
+  // autoDeliver arka planda çalışır — dashboard fetch'ini bloklamaz
+  autoDeliverReadyOrders(supabase, branchId).catch(console.error)
 
-  // 1. Fetch all tables
-  const { data: tables } = await supabase
-    .from('tables')
-    .select('*')
-    .eq('branch_id', branchId)
-    .eq('is_active', true)
-    .order('name', { ascending: true })
+  // Tüm sorgular paralel çalışır
+  const [
+    { data: tables },
+    { data: activeSessions },
+    { data: openBills },
+    { data: activeRequests },
+    { data: activeOrders },
+    { data: stations },
+  ] = await Promise.all([
+    supabase
+      .from('tables')
+      .select('*')
+      .eq('branch_id', branchId)
+      .eq('is_active', true)
+      .order('name', { ascending: true }),
 
-  // 2. Fetch active sessions
-  const { data: activeSessions } = await supabase
-    .from('table_sessions')
-    .select('*')
-    .eq('branch_id', branchId)
-    .eq('is_active', true)
+    supabase
+      .from('table_sessions')
+      .select('*')
+      .eq('branch_id', branchId)
+      .eq('is_active', true),
 
-  // 3. Fetch active open bills
-  const { data: openBills } = await supabase
-    .from('bills')
-    .select('*')
-    .eq('branch_id', branchId)
-    .eq('status', 'open')
+    supabase
+      .from('bills')
+      .select('*')
+      .eq('branch_id', branchId)
+      .eq('status', 'open'),
 
-  // 4. Fetch active service requests (waiter calls)
-  const { data: activeRequests } = await supabase
-    .from('service_requests')
-    .select('*')
-    .eq('branch_id', branchId)
-    .neq('status', 'done')
-    .order('created_at', { ascending: true })
+    supabase
+      .from('service_requests')
+      .select('*')
+      .eq('branch_id', branchId)
+      .neq('status', 'done')
+      .order('created_at', { ascending: true }),
 
-  // 5. Fetch active orders (station bilgisi dahil)
-  const { data: activeOrders } = await supabase
-    .from('orders')
-    .select(`
-      *,
-      order_items (
+    supabase
+      .from('orders')
+      .select(`
         *,
-        products (
-          name_tr,
-          name_en,
-          name_ka,
-          name_ru,
-          categories (
-            id,
-            station_id,
-            stations (id, name, color)
+        order_items (
+          *,
+          products (
+            name_tr,
+            name_en,
+            name_ka,
+            name_ru,
+            categories (
+              id,
+              station_id,
+              stations (id, name, color)
+            )
           )
         )
-      )
-    `)
-    .eq('branch_id', branchId)
-    .neq('status', 'cancelled')
-    .neq('status', 'delivered')
-    .order('created_at', { ascending: true })
+      `)
+      .eq('branch_id', branchId)
+      .neq('status', 'cancelled')
+      .neq('status', 'delivered')
+      .order('created_at', { ascending: true }),
 
-  // 6. Fetch stations
-  const { data: stations } = await supabase
-    .from('stations')
-    .select('*')
-    .eq('branch_id', branchId)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
+    supabase
+      .from('stations')
+      .select('*')
+      .eq('branch_id', branchId)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true }),
+  ])
 
   return {
     tables: tables || [],
@@ -282,12 +291,32 @@ export async function updateOrderStatusAction(orderId: string, status: string) {
 
   if (status === 'preparing') {
     await supabase.from('order_items').update({ status: 'preparing' }).eq('order_id', orderId).eq('status', 'pending')
+
+    // Müşteriye Telegram bildirimi — hazırlanıyor
+    const { data: orderSess } = await supabase
+      .from('orders')
+      .select('session_id, table_sessions(device_id, language)')
+      .eq('id', orderId)
+      .single()
+    if (orderSess?.session_id) {
+      const sess = orderSess.table_sessions as any
+      const deviceId: string = sess?.device_id || ''
+      if (deviceId.startsWith('tg_')) {
+        const custChatId = deviceId.replace('tg_', '')
+        const lang = sess?.language || 'tr'
+        const custMsg = lang === 'en' ? '👨‍🍳 Your order is being prepared in the kitchen!'
+          : lang === 'ru' ? '👨‍🍳 Ваш заказ готовится на кухне!'
+          : lang === 'ka' ? '👨‍🍳 თქვენი შეკვეთა სამზარეულოში მზადდება!'
+          : '👨‍🍳 Siparişiniz mutfakta hazırlanmaya başladı!'
+        sendTelegramNotification(custMsg, custChatId).catch(console.error)
+      }
+    }
   } else if (status === 'ready') {
     await supabase.from('order_items').update({ status: 'ready' }).eq('order_id', orderId).in('status', ['pending', 'preparing'])
 
     const { data: order } = await supabase
       .from('orders')
-      .select('tables(name), branches(name), table_sessions(customer_name)')
+      .select('tables(name), branches(name), table_sessions(customer_name, device_id, language)')
       .eq('id', orderId)
       .single()
 
@@ -301,6 +330,18 @@ export async function updateOrderStatusAction(orderId: string, status: string) {
 ━━━━━━━━━━━━━━━━━
 ✅ Mutfak siparişi hazırladı. Lütfen teslim edin.`
       sendTelegramNotification(msg).catch(console.error)
+
+      // Müşteriye Telegram bildirimi — hazır
+      const deviceId: string = (order.table_sessions as any)?.device_id || ''
+      if (deviceId.startsWith('tg_')) {
+        const custChatId = deviceId.replace('tg_', '')
+        const lang = (order.table_sessions as any)?.language || 'tr'
+        const custMsg = lang === 'en' ? '🍽️ Your order is ready! Our waiter is bringing it to your table.'
+          : lang === 'ru' ? '🍽️ Ваш заказ готов! Официант несёт его к вашему столику.'
+          : lang === 'ka' ? '🍽️ თქვენი შეკვეთა მზად არის! ოფიციანტი მოგართმევთ.'
+          : '🍽️ Siparişiniz hazır! Garsonumuz masanıza getiriyor.'
+        sendTelegramNotification(custMsg, custChatId).catch(console.error)
+      }
     }
   } else if (status === 'delivered') {
     await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', orderId).neq('status', 'delivered')
@@ -360,6 +401,18 @@ export async function updateOrderItemStatusAction(itemId: string, status: string
 ━━━━━━━━━━━━━━━━━
 ✅ Tüm birimler hazırladı. Lütfen teslim edin.`
           sendTelegramNotification(msg).catch(console.error)
+
+          // Müşteriye Telegram bildirimi — hazır
+          const deviceId: string = (order.table_sessions as any)?.device_id || ''
+          if (deviceId.startsWith('tg_')) {
+            const custChatId = deviceId.replace('tg_', '')
+            const lang = (order.table_sessions as any)?.language || 'tr'
+            const custMsg = lang === 'en' ? '🍽️ Your order is ready! Our waiter is bringing it to your table.'
+              : lang === 'ru' ? '🍽️ Ваш заказ готов! Официант несёт его к вашему столику.'
+              : lang === 'ka' ? '🍽️ თქვენი შეკვეთა მზად არის! ოფიციანტი მოგართმევთ.'
+              : '🍽️ Siparişiniz hazır! Garsonumuz masanıza getiriyor.'
+            sendTelegramNotification(custMsg, custChatId).catch(console.error)
+          }
         }
       }
     }
@@ -524,7 +577,7 @@ export async function fetchCategoriesAction(branchId: string) {
   return data || []
 }
 
-export async function createCategoryAction(branchId: string, data: { name_tr: string; name_en?: string; name_ka?: string; name_ru?: string; sort_order?: number; station_id?: string | null }) {
+export async function createCategoryAction(branchId: string, data: { name_tr: string; name_en?: string; name_ka?: string; name_ru?: string; sort_order?: number; station_id?: string | null; photo_url?: string | null }) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
   const { data: created, error } = await supabase
@@ -538,6 +591,7 @@ export async function createCategoryAction(branchId: string, data: { name_tr: st
       sort_order: data.sort_order ?? 0,
       is_active: true,
       station_id: data.station_id ?? null,
+      photo_url: data.photo_url || null,
     })
     .select('id')
     .single()
@@ -545,7 +599,7 @@ export async function createCategoryAction(branchId: string, data: { name_tr: st
   return { success: true, id: created.id }
 }
 
-export async function updateCategoryAction(categoryId: string, data: { name_tr?: string; name_en?: string; name_ka?: string; name_ru?: string; sort_order?: number; is_active?: boolean; station_id?: string | null }) {
+export async function updateCategoryAction(categoryId: string, data: { name_tr?: string; name_en?: string; name_ka?: string; name_ru?: string; sort_order?: number; is_active?: boolean; station_id?: string | null; photo_url?: string | null }) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
   const { error } = await supabase.from('categories').update(data).eq('id', categoryId)
@@ -590,6 +644,7 @@ export async function createProductAction(
     is_spicy?: boolean
     allergens?: string[]
     sort_order?: number
+    photo_url?: string | null
   }
 ) {
   await verifyAdminOrStaff()
@@ -618,6 +673,7 @@ export async function createProductAction(
       allergens: data.allergens ?? [],
       sort_order: data.sort_order ?? 0,
       is_active: true,
+      photo_url: data.photo_url || null,
     })
     .select('id')
     .single()
@@ -649,6 +705,7 @@ export async function updateProductAction(
     custom_price?: number | null
     stock_count?: number | null
     branch_active?: boolean
+    photo_url?: string | null
   }
 ) {
   await verifyAdminOrStaff()

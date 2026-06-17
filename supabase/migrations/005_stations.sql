@@ -16,5 +16,18 @@ ALTER TABLE categories ADD COLUMN IF NOT EXISTS station_id UUID REFERENCES stati
 -- RLS
 ALTER TABLE stations ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "stations_public_read" ON stations FOR SELECT USING (true);
-CREATE POLICY "stations_service_all" ON stations FOR ALL USING (true) WITH CHECK (true);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename='stations' AND policyname='stations_public_read'
+  ) THEN
+    CREATE POLICY "stations_public_read" ON stations FOR SELECT USING (true);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename='stations' AND policyname='stations_service_all'
+  ) THEN
+    CREATE POLICY "stations_service_all" ON stations FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+END $$;
