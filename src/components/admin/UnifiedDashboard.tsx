@@ -9,6 +9,7 @@ import {
   fetchUnifiedDashboardData,
   updateOrderStatusAction,
   updateOrderItemStatusAction,
+  acknowledgeServiceRequestAction,
   completeServiceRequestAction,
   resetTableAction,
   payBillAction
@@ -164,6 +165,10 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
 
   const handleUpdateOrderStatus = async (orderId: string, status: string) => {
     await updateOrderStatusAction(orderId, status)
+  }
+
+  const handleAcknowledgeRequest = async (requestId: string) => {
+    await acknowledgeServiceRequestAction(requestId)
   }
 
   const handleCompleteRequest = async (requestId: string) => {
@@ -541,22 +546,28 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
                         const table = data.tables.find(t => t.id === req.table_id)
                         const session = data.activeSessions.find(s => s.id === req.session_id)
                         const timeStr = new Date(req.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+                        const isAcknowledged = req.status === 'acknowledged'
+
                         let label = req.type, icon = '🔔'
-                        if (req.type === 'waiter')   { label = 'Garson Çağır';      icon = '🙋‍♂️' }
-                        else if (req.type === 'bill')    { label = 'Hesap İste';       icon = '🧾' }
-                        else if (req.type === 'napkin')  { label = 'Peçete İste';      icon = '🧻' }
-                        else if (req.type === 'water')   { label = 'Su İste';          icon = '💧' }
-                        else if (req.type === 'salt')    { label = 'Tuz/Karabiber';    icon = '🧂' }
-                        else if (req.type === 'cutlery') { label = 'Çatal / Bıçak';   icon = '🍴' }
-                        else if (req.type === 'cleaning'){ label = 'Temizlik Talebi';  icon = '🧹' }
+                        if (req.type === 'waiter')   { label = 'Garson Çağır';     icon = '🙋‍♂️' }
+                        else if (req.type === 'bill')    { label = 'Hesap İste';      icon = '🧾' }
+                        else if (req.type === 'napkin')  { label = 'Peçete İste';     icon = '🧻' }
+                        else if (req.type === 'water')   { label = 'Su İste';         icon = '💧' }
+                        else if (req.type === 'salt')    { label = 'Tuz/Karabiber';   icon = '🧂' }
+                        else if (req.type === 'cutlery') { label = 'Çatal / Bıçak';  icon = '🍴' }
+                        else if (req.type === 'cleaning'){ label = 'Temizlik Talebi'; icon = '🧹' }
 
                         return (
                           <div
                             key={req.id}
-                            className={`flex items-center justify-between p-4 rounded-2xl border ${
-                              req.priority === 'red'  ? 'bg-red-950/10 border-red-900/30 text-red-300'  :
-                              req.priority === 'blue' ? 'bg-sky-950/10 border-sky-900/30 text-sky-300'  :
-                                                        'bg-amber-950/10 border-amber-900/30 text-amber-300'
+                            className={`flex items-center justify-between p-4 rounded-2xl border transition ${
+                              isAcknowledged
+                                ? 'bg-sky-950/10 border-sky-800/30'
+                                : req.priority === 'red'
+                                  ? 'bg-red-950/10 border-red-900/30'
+                                  : req.priority === 'blue'
+                                    ? 'bg-zinc-900/40 border-zinc-800'
+                                    : 'bg-amber-950/10 border-amber-900/30'
                             }`}
                           >
                             <div className="flex items-center gap-3">
@@ -566,17 +577,35 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
                                   <span>{table?.name || 'Masa'}</span>
                                   <span className="text-[10px] text-zinc-500 font-medium">({session?.customer_name || 'Müşteri'})</span>
                                 </div>
-                                <div className="text-[10px] font-semibold mt-0.5">Talep: {label}</div>
+                                <div className="text-[10px] font-semibold mt-0.5 flex items-center gap-2">
+                                  <span className={isAcknowledged ? 'text-sky-400' : req.priority === 'red' ? 'text-red-300' : 'text-amber-300'}>
+                                    {label}
+                                  </span>
+                                  {isAcknowledged && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 font-black">
+                                      👀 Görüldü
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
                               <span className="text-[10px] text-zinc-500">{timeStr}</span>
-                              <button
-                                onClick={() => handleCompleteRequest(req.id)}
-                                className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 active:scale-[0.98] transition"
-                              >
-                                <Check className="w-3.5 h-3.5" /> Tamamlandı
-                              </button>
+                              {!isAcknowledged ? (
+                                <button
+                                  onClick={() => handleAcknowledgeRequest(req.id)}
+                                  className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 active:scale-[0.98] transition"
+                                >
+                                  👀 Gördüm
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleCompleteRequest(req.id)}
+                                  className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 active:scale-[0.98] transition"
+                                >
+                                  <Check className="w-3.5 h-3.5" /> Tamamlandı
+                                </button>
+                              )}
                             </div>
                           </div>
                         )

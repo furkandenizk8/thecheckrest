@@ -308,13 +308,29 @@ export async function updateOrderItemStatusAction(itemId: string, status: string
   return { success: true }
 }
 
+export async function acknowledgeServiceRequestAction(requestId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+
+  const { error } = await supabase
+    .from('service_requests')
+    .update({
+      status: 'acknowledged',
+      acknowledged_at: new Date().toISOString()
+    })
+    .eq('id', requestId)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
 export async function completeServiceRequestAction(requestId: string) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
 
   const { error } = await supabase
     .from('service_requests')
-    .update({ 
+    .update({
       status: 'done',
       completed_at: new Date().toISOString()
     })
