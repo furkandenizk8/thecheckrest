@@ -25,7 +25,23 @@ import {
   ToggleLeft,
   ToggleRight,
   Loader2,
+  Languages,
 } from 'lucide-react'
+
+async function autoTranslate(text: string): Promise<{ en: string; ka: string; ru: string } | null> {
+  if (!text.trim()) return null
+  try {
+    const res = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,6 +87,7 @@ function ProductModal({
 }) {
   const isEdit = !!product
   const [saving, setSaving] = useState(false)
+  const [translating, setTranslating] = useState(false)
   const [error, setError] = useState('')
 
   const [form, setForm] = useState({
@@ -92,6 +109,23 @@ function ProductModal({
   })
 
   const set = (key: keyof typeof form, value: any) => setForm(f => ({ ...f, [key]: value }))
+
+  const handleTranslate = async () => {
+    if (!form.name_tr.trim()) { setError('Önce Türkçe adı girin.'); return }
+    setError('')
+    setTranslating(true)
+    const result = await autoTranslate(form.name_tr)
+    if (result) {
+      setForm(f => ({ ...f, name_en: result.en, name_ka: result.ka, name_ru: result.ru }))
+    }
+    // Also translate description if filled
+    if (form.description_tr.trim()) {
+      const descResult = await autoTranslate(form.description_tr)
+      // descriptions stored only in TR for now, no extra fields needed
+      void descResult
+    }
+    setTranslating(false)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -146,10 +180,23 @@ function ProductModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-          {/* Name */}
+          {/* Name + Auto-Translate */}
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1">
-              <label className="text-[10px] font-bold text-zinc-500 uppercase">Ürün Adı (TR) *</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase">Ürün Adı (TR) *</label>
+                <button
+                  type="button"
+                  onClick={handleTranslate}
+                  disabled={translating || !form.name_tr.trim()}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-[10px] font-bold transition"
+                >
+                  {translating
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Languages className="w-3 h-3" />}
+                  {translating ? 'Çevriliyor...' : 'Otomatik Çevir'}
+                </button>
+              </div>
               <input value={form.name_tr} onChange={e => set('name_tr', e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none transition"
                 placeholder="Örn: Khachapuri" />
@@ -158,14 +205,22 @@ function ProductModal({
               <label className="text-[10px] font-bold text-zinc-500 uppercase">Ad (EN)</label>
               <input value={form.name_en} onChange={e => set('name_en', e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none transition"
-                placeholder="English name" />
+                placeholder="Auto-filled" />
             </div>
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-zinc-500 uppercase">Ad (KA)</label>
               <input value={form.name_ka} onChange={e => set('name_ka', e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none transition"
-                placeholder="სახელი" />
+                placeholder="ავტო-შევსება" />
             </div>
+          </div>
+
+          {/* RU name (hidden below, auto-filled) */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase">Ad (RU)</label>
+            <input value={form.name_ru} onChange={e => set('name_ru', e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none transition"
+              placeholder="Авто-заполнение" />
           </div>
 
           {/* Description */}
@@ -285,20 +340,36 @@ function CategoryModal({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [name, setName] = useState(category?.name_tr ?? '')
+  const [names, setNames] = useState({ tr: category?.name_tr ?? '', en: '', ka: '', ru: '' })
   const [saving, setSaving] = useState(false)
+  const [translating, setTranslating] = useState(false)
   const [error, setError] = useState('')
+
+  const handleTranslate = async () => {
+    if (!names.tr.trim()) { setError('Önce Türkçe adı girin.'); return }
+    setError('')
+    setTranslating(true)
+    const result = await autoTranslate(names.tr)
+    if (result) setNames(n => ({ ...n, en: result.en, ka: result.ka, ru: result.ru }))
+    setTranslating(false)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) { setError('Kategori adı zorunlu.'); return }
+    if (!names.tr.trim()) { setError('Kategori adı zorunlu.'); return }
     setSaving(true)
     try {
+      const payload = {
+        name_tr: names.tr,
+        name_en: names.en || names.tr,
+        name_ka: names.ka || names.tr,
+        name_ru: names.ru || names.tr,
+      }
       let res: any
       if (category) {
-        res = await updateCategoryAction(category.id, { name_tr: name, name_en: name, name_ka: name, name_ru: name })
+        res = await updateCategoryAction(category.id, payload)
       } else {
-        res = await createCategoryAction(branchId, { name_tr: name, name_en: name, name_ka: name, name_ru: name })
+        res = await createCategoryAction(branchId, payload)
       }
       if (!res.success) { setError(res.error || 'Bir hata oluştu.'); return }
       onSaved()
@@ -319,10 +390,27 @@ function CategoryModal({
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase">Kategori Adı</label>
-            <input value={name} onChange={e => setName(e.target.value)} autoFocus
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase">Kategori Adı (TR)</label>
+              <button type="button" onClick={handleTranslate} disabled={translating || !names.tr.trim()}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-[10px] font-bold transition">
+                {translating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Languages className="w-3 h-3" />}
+                {translating ? 'Çevriliyor...' : 'Çevir'}
+              </button>
+            </div>
+            <input value={names.tr} onChange={e => setNames(n => ({ ...n, tr: e.target.value }))} autoFocus
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none transition"
               placeholder="Örn: Ana Yemekler" />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {(['en', 'ka', 'ru'] as const).map(lang => (
+              <div key={lang} className="space-y-1">
+                <label className="text-[9px] font-bold text-zinc-600 uppercase">{lang.toUpperCase()}</label>
+                <input value={names[lang]} onChange={e => setNames(n => ({ ...n, [lang]: e.target.value }))}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-2 py-1.5 text-[10px] text-zinc-300 focus:border-amber-500 focus:outline-none transition"
+                  placeholder="otomatik" />
+              </div>
+            ))}
           </div>
           {error && <div className="p-3 bg-red-950/20 border border-red-900/30 text-red-400 rounded-xl text-xs">{error}</div>}
           <div className="flex gap-2">
