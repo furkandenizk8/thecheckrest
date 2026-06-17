@@ -67,18 +67,17 @@ export async function getOrCreateTableSession(
 ): Promise<string | null> {
   const { tableId, branchId, customerName, deviceId, language } = params
 
-  // 1. Önce bu masada aktif bir oturum var mı kontrol et
+  // 1. Önce bu masada bu cihaz için aktif bir oturum var mı kontrol et
   const { data: existingSession, error: checkError } = await supabase
     .from('table_sessions')
     .select('id')
     .eq('table_id', tableId)
+    .eq('device_id', deviceId)
     .eq('is_active', true)
-    .order('opened_at', { ascending: false })
-    .limit(1)
     .maybeSingle()
 
   if (checkError) {
-    console.error('Error checking existing session:', checkError)
+    console.error('Error checking existing device session:', checkError)
   }
 
   if (existingSession) {

@@ -124,3 +124,222 @@ export async function getSystemStatus() {
     }
   }
 }
+
+export async function fetchBranchesAction() {
+  const supabase = await createClient()
+  const { data } = await supabase.from('branches').select('*')
+  return data || []
+}
+
+export async function fetchUnifiedDashboardData(branchId: string) {
+  const supabase = await createClient()
+
+  // 1. Fetch all tables
+  const { data: tables } = await supabase
+    .from('tables')
+    .select('*')
+    .eq('branch_id', branchId)
+    .eq('is_active', true)
+    .order('name', { ascending: true })
+
+  // 2. Fetch active sessions
+  const { data: activeSessions } = await supabase
+    .from('table_sessions')
+    .select('*')
+    .eq('branch_id', branchId)
+    .eq('is_active', true)
+
+  // 3. Fetch active open bills
+  const { data: openBills } = await supabase
+    .from('bills')
+    .select('*')
+    .eq('branch_id', branchId)
+    .eq('status', 'open')
+
+  // 4. Fetch active service requests (waiter calls)
+  const { data: activeRequests } = await supabase
+    .from('service_requests')
+    .select('*')
+    .eq('branch_id', branchId)
+    .neq('status', 'done')
+    .order('created_at', { ascending: true })
+
+  // 5. Fetch active orders
+  const { data: activeOrders } = await supabase
+    .from('orders')
+    .select(`
+      *,
+      order_items (
+        *,
+        products (
+          name_tr,
+          name_en,
+          name_ka,
+          name_ru
+        )
+      )
+    `)
+    .eq('branch_id', branchId)
+    .neq('status', 'cancelled')
+    .neq('status', 'delivered')
+    .order('created_at', { ascending: true })
+
+  return {
+    tables: tables || [],
+    activeSessions: activeSessions || [],
+    openBills: openBills || [],
+    activeRequests: activeRequests || [],
+    activeOrders: activeOrders || []
+  }
+}
+
+export async function updateOrderStatusAction(orderId: string, status: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('orders')
+    .update({ 
+      status,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+export async function updateOrderItemStatusAction(itemId: string, status: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('order_items')
+    .update({ status })
+    .eq('id', itemId)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+export async function completeServiceRequestAction(requestId: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('service_requests')
+    .update({ 
+      status: 'done',
+      completed_at: new Date().toISOString()
+    })
+    .eq('id', requestId)
+
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+export async function resetTableAction(tableId: string) {
+  const supabase = await createClient()
+
+  // 1. Get branch_id or check bill
+  const { data: openBill } = await supabase
+    .from('bills')
+    .select('id')
+    .eq('table_id', tableId)
+    .eq('status', 'open')
+    .maybeSingle()
+
+  if (openBill) {
+    // Close the bill
+    await supabase
+      .from('bills')
+      .update({ 
+        status: 'closed',
+        closed_at: new Date().toISOString()
+      })
+      .eq('id', openBill.id)
+  }
+
+  // 2. Deactivate all sessions on this table
+  await supabase
+    .from('table_sessions')
+    .update({ is_active: false })
+    .eq('table_id', tableId)
+
+  // 3. Clear pending requests on this table
+  await supabase
+    .from('service_requests')
+    .update({ 
+      status: 'done',
+      completed_at: new Date().toISOString()
+    })
+    .eq('table_id', tableId)
+    .neq('status', 'done')
+
+  // 4. Update table status to empty
+  await supabase
+    .from('tables')
+    .update({ status: 'empty' })
+    .eq('id', tableId)
+
+  return { success: true }
+}
+
+export async function payBillAction(billId: string, amount: number, method: 'cash' | 'card') {
+  const supabase = await createClient()
+
+  // 1. Fetch current bill
+  const { data: bill } = await supabase
+    .from('bills')
+    .select('*')
+    .eq('id', billId)
+    .single()
+
+  if (!bill) {
+    return { success: false, error: 'Adisyon bulunamadı.' }
+  }
+
+  const newPaidAmount = Number(bill.paid_amount || 0) + amount
+  const isFullyPaid = newPaidAmount >= Number(bill.total_amount)
+
+  const updateData: any = {
+    paid_amount: newPaidAmount,
+    payment_method: method
+  }
+
+  if (isFullyPaid) {
+    updateData.status = 'closed'
+    updateData.closed_at = new Date().toISOString()
+  }
+
+  const { error } = await supabase
+    .from('bills')
+    .update(updateData)
+    .eq('id', billId)
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  // If fully paid, automatically reset the table and deactivate sessions
+  if (isFullyPaid) {
+    await supabase
+      .from('table_sessions')
+      .update({ is_active: false })
+      .eq('table_id', bill.table_id)
+
+    await supabase
+      .from('tables')
+      .update({ status: 'empty' })
+      .eq('id', bill.table_id)
+
+    // Complete requests
+    await supabase
+      .from('service_requests')
+      .update({ 
+        status: 'done',
+        completed_at: new Date().toISOString()
+      })
+      .eq('table_id', bill.table_id)
+      .neq('status', 'done')
+  }
+
+  return { success: true, isFullyPaid }
+}
