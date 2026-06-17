@@ -54,7 +54,13 @@ export async function middleware(request: NextRequest) {
 
     // Admin sayfalarına erişim kontrolü (Sadece super_admin veya brand_owner rolleri)
     if (pathname.startsWith('/admin')) {
-      const { data: roleData } = await supabase
+      const { createClient: createSupabaseClient } = await import('@supabase/supabase-js')
+      const serviceClient = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      
+      const { data: roleData } = await serviceClient
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)

@@ -1,6 +1,34 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+
+async function verifyAdminOrStaff() {
+  const cookieClient = await createClient()
+  const { data: { user }, error: authError } = await cookieClient.auth.getUser()
+  
+  if (authError || !user) {
+    throw new Error('Unauthorized: No active session.')
+  }
+
+  const serviceClient = createServiceClient()
+  const { data: roleData, error: roleError } = await serviceClient
+    .from('user_roles')
+    .select('role, branch_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (roleError || !roleData) {
+    throw new Error('Unauthorized: Access denied.')
+  }
+
+  const allowedRoles = ['super_admin', 'brand_owner', 'branch_manager', 'cashier', 'kitchen', 'waiter']
+  if (!allowedRoles.includes(roleData.role)) {
+    throw new Error('Unauthorized: Invalid role.')
+  }
+
+  return { user, role: roleData.role, branchId: roleData.branch_id }
+}
+
 
 export async function setupWebhook(appUrl: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN
@@ -86,7 +114,13 @@ Bu bildirim, Telegram Bot Token ve Chat ID'nizin doğru yapılandırıldığın�
 
 export async function getSystemStatus() {
   try {
-    const supabase = await createClient()
+    const cookieClient = await createClient()
+    const { data: { user }, error: authErr } = await cookieClient.auth.getUser()
+    if (authErr || !user) {
+      return { dbConnected: false, error: 'Unauthorized: No active session.' }
+    }
+
+    const supabase = createServiceClient()
     
     // Get counts
     const { count: branchCount, error: branchErr } = await supabase
@@ -126,13 +160,15 @@ export async function getSystemStatus() {
 }
 
 export async function fetchBranchesAction() {
-  const supabase = await createClient()
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
   const { data } = await supabase.from('branches').select('*')
   return data || []
 }
 
 export async function fetchUnifiedDashboardData(branchId: string) {
-  const supabase = await createClient()
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
 
   // 1. Fetch all tables
   const { data: tables } = await supabase
@@ -194,7 +230,8 @@ export async function fetchUnifiedDashboardData(branchId: string) {
 }
 
 export async function updateOrderStatusAction(orderId: string, status: string) {
-  const supabase = await createClient()
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
 
   const { error } = await supabase
     .from('orders')
@@ -209,7 +246,8 @@ export async function updateOrderStatusAction(orderId: string, status: string) {
 }
 
 export async function updateOrderItemStatusAction(itemId: string, status: string) {
-  const supabase = await createClient()
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
 
   const { error } = await supabase
     .from('order_items')
@@ -221,7 +259,8 @@ export async function updateOrderItemStatusAction(itemId: string, status: string
 }
 
 export async function completeServiceRequestAction(requestId: string) {
-  const supabase = await createClient()
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
 
   const { error } = await supabase
     .from('service_requests')
@@ -236,7 +275,8 @@ export async function completeServiceRequestAction(requestId: string) {
 }
 
 export async function resetTableAction(tableId: string) {
-  const supabase = await createClient()
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
 
   // 1. Get branch_id or check bill
   const { data: openBill } = await supabase
@@ -283,7 +323,8 @@ export async function resetTableAction(tableId: string) {
 }
 
 export async function payBillAction(billId: string, amount: number, method: 'cash' | 'card') {
-  const supabase = await createClient()
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
 
   // 1. Fetch current bill
   const { data: bill } = await supabase
