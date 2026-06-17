@@ -454,8 +454,14 @@ export async function POST(request: Request) {
       } 
       else if (action === 'cat') {
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
-        await showCategoryProducts(token, chatId, param, lang, cart, logoUrl, supabase, messageId)
-      } 
+        await showCategoryProducts(token, chatId, param, lang, cart, logoUrl, supabase, messageId, 0)
+      }
+      else if (action === 'catp') {
+        const [categoryId, indexStr] = param.split(':')
+        const idx = parseInt(indexStr) || 0
+        await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
+        await showCategoryProducts(token, chatId, categoryId, lang, cart, logoUrl, supabase, messageId, idx)
+      }
       else if (action === 'add' || action === 'rem') {
         const productId = param
         const { data: product } = await supabase
@@ -483,8 +489,17 @@ export async function POST(request: Request) {
             .update({ cart })
             .eq('id', session.id)
 
+          // Hangi index'te olduğumuzu bul, sayfayı aynı üründe güncelle
+          const { data: catProds } = await supabase
+            .from('products')
+            .select('id')
+            .eq('category_id', product.category_id)
+            .eq('is_active', true)
+            .order('sort_order', { ascending: true })
+          const prodIdx = catProds ? catProds.findIndex((p: any) => p.id === productId) : 0
+
           await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId, text: alertText })
-          await showCategoryProducts(token, chatId, product.category_id, lang, cart, logoUrl, supabase, messageId)
+          await showCategoryProducts(token, chatId, product.category_id, lang, cart, logoUrl, supabase, messageId, prodIdx >= 0 ? prodIdx : 0)
         } else {
           await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId, text: 'Hata: Ürün bulunamadı.' })
         }
@@ -777,7 +792,8 @@ async function showCategoryProducts(
   cart: Record<string, number>,
   logoUrl: string,
   supabase: any,
-  messageId: number
+  messageId: number,
+  productIndex: number = 0
 ) {
   const { data: category } = await supabase
     .from('categories')
@@ -793,46 +809,55 @@ async function showCategoryProducts(
     .order('sort_order', { ascending: true })
 
   const categoryName = category ? getCategoryName(category, lang) : 'Menü'
-  let text = getT(lang, 'categoryTitle', { categoryName }) + '\n\n'
+  const cartTotal = Object.values(cart).reduce((a: number, b: number) => a + b, 0)
+
+  if (!products || products.length === 0) {
+    const text = `📂 <b>${escapeHtml(categoryName)}</b>\n━━━━━━━━━━━━━━━━━\n<i>${getT(lang, 'emptyCategory')}</i>`
+    const inlineKeyboard = [[{ text: getT(lang, 'btnBackCats'), callback_data: 'menu:cats' }]]
+    await sendOrEditPhotoMessage(token, chatId, category?.photo_url || logoUrl, text, { inline_keyboard: inlineKeyboard }, messageId)
+    return
+  }
+
+  const total = products.length
+  const idx = Math.max(0, Math.min(productIndex, total - 1))
+  const prod = products[idx]
+
+  const { name, desc } = getProductDetails(prod, lang)
+  const price = Number(prod.base_price).toFixed(2)
+  const qtyInCart = cart[prod.id] || 0
+  const photo = prod.photo_url || category?.photo_url || logoUrl
+
+  let text = `📂 <b>${escapeHtml(categoryName)}</b>  ${idx + 1}/${total}\n━━━━━━━━━━━━━━━━━\n`
+  text += `🍽 <b>${escapeHtml(name)}</b>\n`
+  text += `💰 <b>${price} GEL</b>\n`
+  if (desc) text += `\n<i>${escapeHtml(desc)}</i>\n`
+  if (qtyInCart > 0) text += `\n🛒 <i>Sepetinizde: <b>${qtyInCart} adet</b></i>`
+
+  const prevIdx = idx > 0 ? idx - 1 : total - 1
+  const nextIdx = idx < total - 1 ? idx + 1 : 0
 
   const inlineKeyboard: any[] = []
 
-  // Kategori fotoğrafı yoksa ürünlerin ilk fotoğrafını kullan, o da yoksa logo
-  const firstProductWithPhoto = products?.find((p: any) => p.photo_url)
-  const categoryPhoto = category?.photo_url || firstProductWithPhoto?.photo_url || logoUrl
-
-  if (products && products.length > 0) {
-    products.forEach((prod: any, idx: number) => {
-      const { name, desc } = getProductDetails(prod, lang)
-      const price = Number(prod.base_price).toFixed(2)
-      const qtyInCart = cart[prod.id] || 0
-      const hasPhoto = !!prod.photo_url
-
-      text += `${hasPhoto ? '📷 ' : ''}<b>${idx + 1}. ${escapeHtml(name)}</b> — <b>${price} GEL</b>\n`
-      if (desc) {
-        text += `<i>${escapeHtml(desc)}</i>\n`
-      }
-      if (qtyInCart > 0) {
-        text += `👉 <i>Sepetinizde: <b>${qtyInCart} adet</b></i>\n`
-      }
-      text += '\n'
-
-      inlineKeyboard.push([
-        { text: '➖', callback_data: `rem:${prod.id}` },
-        { text: `${name}${qtyInCart > 0 ? ` (${qtyInCart})` : ''}`, callback_data: `nut:${prod.id}` },
-        { text: '➕', callback_data: `add:${prod.id}` }
-      ])
-    })
-  } else {
-    text += `<i>${getT(lang, 'emptyCategory')}</i>\n`
+  if (total > 1) {
+    inlineKeyboard.push([
+      { text: '◀️', callback_data: `catp:${categoryId}:${prevIdx}` },
+      { text: `${idx + 1} / ${total}`, callback_data: `cat:${categoryId}` },
+      { text: '▶️', callback_data: `catp:${categoryId}:${nextIdx}` },
+    ])
   }
 
   inlineKeyboard.push([
-    { text: getT(lang, 'btnBackCats'), callback_data: 'menu:cats' },
-    { text: getT(lang, 'btnCart', { count: Object.values(cart).reduce((a, b) => a + b, 0) }), callback_data: 'menu:cart' }
+    { text: '➖', callback_data: `rem:${prod.id}` },
+    { text: qtyInCart > 0 ? `🛒 ${qtyInCart} adet` : '🛒 Sepete Ekle', callback_data: `add:${prod.id}` },
+    { text: '➕', callback_data: `add:${prod.id}` },
   ])
 
-  await sendOrEditPhotoMessage(token, chatId, categoryPhoto, text, { inline_keyboard: inlineKeyboard }, messageId)
+  inlineKeyboard.push([
+    { text: getT(lang, 'btnBackCats'), callback_data: 'menu:cats' },
+    { text: getT(lang, 'btnCart', { count: cartTotal }), callback_data: 'menu:cart' },
+  ])
+
+  await sendOrEditPhotoMessage(token, chatId, photo, text, { inline_keyboard: inlineKeyboard }, messageId)
 }
 
 async function showProductDetails(
