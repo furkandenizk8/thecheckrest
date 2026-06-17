@@ -321,7 +321,7 @@ export default function SetupDashboard() {
                     </button>
                   </div>
                   <p className="text-[10px] text-zinc-600">
-                    Örn: <code className="text-zinc-500">https://thecheckrest.vercel.app</code> (Otomatik olarak algılanan: {typeof window !== 'undefined' ? window.location.origin : ''})
+                    Örn: <code className="text-zinc-500">https://thecheckrest.vercel.app</code> (Otomatik olarak algılanan: {appUrl})
                   </p>
                 </form>
 
