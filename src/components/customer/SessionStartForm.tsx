@@ -18,6 +18,7 @@ interface SessionStartFormProps {
     languages: string[]
   }
   tableToken: string
+  botUsername?: string
 }
 
 const LANGUAGE_LABELS: Record<Language, { label: string; flag: string }> = {
@@ -27,7 +28,7 @@ const LANGUAGE_LABELS: Record<Language, { label: string; flag: string }> = {
   ka: { label: 'ქართული', flag: '🇬🇪' },
 }
 
-export default function SessionStartForm({ tableDetails, tableToken }: SessionStartFormProps) {
+export default function SessionStartForm({ tableDetails, tableToken, botUsername = 'thecheckmenubot' }: SessionStartFormProps) {
   const router = useRouter()
   
   // Şubenin desteklediği dilleri filtrele (veri tabanından gelen array'e göre)
@@ -253,7 +254,7 @@ export default function SessionStartForm({ tableDetails, tableToken }: SessionSt
               <button
                 type="button"
                 onClick={() => {
-                  window.location.href = `https://t.me/chectthemenubot?start=${tableToken}`
+                  window.location.href = `https://t.me/${botUsername}?start=${tableToken}`
                 }}
                 className="w-full bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white font-bold py-3.5 rounded-xl transition duration-300 shadow-lg shadow-sky-500/20 active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
               >

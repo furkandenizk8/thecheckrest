@@ -52,11 +52,29 @@ export default async function TableLandingPage({ params }: PageProps) {
     )
   }
 
+  // Fetch bot username dynamically using Next.js cached fetch (revalidated every hour)
+  let botUsername = 'thecheckmenubot'
+  const botToken = process.env.TELEGRAM_BOT_TOKEN
+  if (botToken) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`, {
+        next: { revalidate: 3600 }
+      })
+      const data = await res.json()
+      if (data.ok && data.result?.username) {
+        botUsername = data.result.username
+      }
+    } catch (e) {
+      console.error('Failed to fetch bot username:', e)
+    }
+  }
+
   // Geçerli masa durumunda giriş formunu yükle
   return (
     <SessionStartForm 
       tableDetails={tableDetails} 
       tableToken={tableToken} 
+      botUsername={botUsername}
     />
   )
 }
