@@ -797,13 +797,18 @@ async function showCategoryProducts(
 
   const inlineKeyboard: any[] = []
 
+  // Kategori fotoğrafı yoksa ürünlerin ilk fotoğrafını kullan, o da yoksa logo
+  const firstProductWithPhoto = products?.find((p: any) => p.photo_url)
+  const categoryPhoto = category?.photo_url || firstProductWithPhoto?.photo_url || logoUrl
+
   if (products && products.length > 0) {
     products.forEach((prod: any, idx: number) => {
       const { name, desc } = getProductDetails(prod, lang)
       const price = Number(prod.base_price).toFixed(2)
       const qtyInCart = cart[prod.id] || 0
-      
-      text += `<b>${idx + 1}. ${escapeHtml(name)}</b> — <b>${price} GEL</b>\n`
+      const hasPhoto = !!prod.photo_url
+
+      text += `${hasPhoto ? '📷 ' : ''}<b>${idx + 1}. ${escapeHtml(name)}</b> — <b>${price} GEL</b>\n`
       if (desc) {
         text += `<i>${escapeHtml(desc)}</i>\n`
       }
@@ -814,7 +819,7 @@ async function showCategoryProducts(
 
       inlineKeyboard.push([
         { text: '➖', callback_data: `rem:${prod.id}` },
-        { text: `${name} ${qtyInCart > 0 ? `(${qtyInCart})` : ''}`, callback_data: `nut:${prod.id}` },
+        { text: `${name}${qtyInCart > 0 ? ` (${qtyInCart})` : ''}`, callback_data: `nut:${prod.id}` },
         { text: '➕', callback_data: `add:${prod.id}` }
       ])
     })
@@ -827,7 +832,7 @@ async function showCategoryProducts(
     { text: getT(lang, 'btnCart', { count: Object.values(cart).reduce((a, b) => a + b, 0) }), callback_data: 'menu:cart' }
   ])
 
-  await sendOrEditPhotoMessage(token, chatId, logoUrl, text, { inline_keyboard: inlineKeyboard }, messageId)
+  await sendOrEditPhotoMessage(token, chatId, categoryPhoto, text, { inline_keyboard: inlineKeyboard }, messageId)
 }
 
 async function showProductDetails(
