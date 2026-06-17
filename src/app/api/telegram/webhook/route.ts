@@ -491,7 +491,7 @@ export async function POST(request: Request) {
       } 
       else if (action === 'nut') {
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
-        await showProductDetails(token, chatId, param, lang, logoUrl, supabase, messageId)
+        await showProductDetails(token, chatId, param, lang, cart, logoUrl, supabase, messageId)
       } 
       else if (action === 'cart' && param === 'clear') {
         await supabase
@@ -796,8 +796,6 @@ async function showCategoryProducts(
   const cartTotal = Object.values(cart).reduce((a: number, b: number) => a + b, 0)
   const categoryPhoto = category?.photo_url || products?.find((p: any) => p.photo_url)?.photo_url || logoUrl
 
-  const NUM_EMOJI = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟']
-
   let text = `📂 <b>${escapeHtml(categoryName)}</b>\n━━━━━━━━━━━━━━━━━\n\n`
 
   const inlineKeyboard: any[] = []
@@ -807,24 +805,17 @@ async function showCategoryProducts(
       const { name, desc } = getProductDetails(prod, lang)
       const price = Number(prod.base_price).toFixed(2)
       const qtyInCart = cart[prod.id] || 0
-      const num = NUM_EMOJI[idx] || `${idx + 1}.`
 
-      text += `${num} <b>${escapeHtml(name)}</b>\n`
+      if (idx > 0) text += `┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n`
+      text += `🍽 <b>${escapeHtml(name)}</b>\n`
       text += `💰 <b>${price} GEL</b>`
       if (qtyInCart > 0) text += `  🛒 <b>${qtyInCart} adet</b>`
       text += '\n'
       if (desc) text += `<i>${escapeHtml(desc)}</i>\n`
       text += '\n'
 
-      const btnLabel = qtyInCart > 0
-        ? `${num} 🛒 ${qtyInCart} adet`
-        : `${num} Ekle`
-
-      inlineKeyboard.push([
-        { text: '➖', callback_data: `rem:${prod.id}` },
-        { text: btnLabel, callback_data: `nut:${prod.id}` },
-        { text: '➕', callback_data: `add:${prod.id}` },
-      ])
+      const btnLabel = qtyInCart > 0 ? `${name}  🛒 ${qtyInCart}` : name
+      inlineKeyboard.push([{ text: btnLabel, callback_data: `nut:${prod.id}` }])
     })
   } else {
     text += `<i>${getT(lang, 'emptyCategory')}</i>\n`
@@ -843,6 +834,7 @@ async function showProductDetails(
   chatId: number,
   productId: string,
   lang: string,
+  cart: Record<string, number>,
   logoUrl: string,
   supabase: any,
   messageId: number
@@ -863,30 +855,29 @@ async function showProductDetails(
   const fat = product.fat_g || 0
   const allergens = (product.allergens || []).join(', ')
   const productPhoto = product.photo_url || logoUrl
+  const qtyInCart = cart[product.id] || 0
 
-  let text = `🍔 <b>${escapeHtml(name)}</b>\n━━━━━━━━━━━━━━━━━\n`
+  let text = `🍽 <b>${escapeHtml(name)}</b>\n━━━━━━━━━━━━━━━━━\n`
+  text += `💰 <b>${price} GEL</b>\n\n`
   if (desc) text += `<i>${escapeHtml(desc)}</i>\n\n`
-  
-  if (ingredients) text += `📝 <b>İçindekiler / Ingredients:</b>\n${escapeHtml(ingredients)}\n\n`
-  if (allergens) text += `⚠️ <b>Alerjenler / Allergens:</b> ${escapeHtml(allergens)}\n\n`
-  
+  if (ingredients) text += `📝 <b>İçindekiler:</b>\n${escapeHtml(ingredients)}\n\n`
+  if (allergens) text += `⚠️ <b>Alerjenler:</b> ${escapeHtml(allergens)}\n\n`
   if (calories > 0) {
-    text += `🔥 <b>Enerji ve Besin Ögeleri:</b>\n`
-    text += `• Kalori (Calories): ${calories} kcal\n`
-    text += `• Protein: ${protein}g\n`
-    text += `• Karbonhidrat (Carbs): ${carbs}g\n`
-    text += `• Yağ (Fat): ${fat}g\n\n`
+    text += `🔥 ${calories} kcal  •  Protein ${protein}g  •  Karbonhidrat ${carbs}g  •  Yağ ${fat}g\n`
   }
-  
-  text += `💰 Fiyat: <b>${price} GEL</b>`
+  if (qtyInCart > 0) text += `\n🛒 <b>Sepetinizde: ${qtyInCart} adet</b>`
+
+  const cartRow = qtyInCart > 0
+    ? [
+        { text: '➖', callback_data: `rem:${product.id}` },
+        { text: `🛒  ${qtyInCart} adet`, callback_data: `nut:${product.id}` },
+        { text: '➕', callback_data: `add:${product.id}` },
+      ]
+    : [{ text: '🛒 Sepete Ekle', callback_data: `add:${product.id}` }]
 
   const inlineKeyboard = [
-    [
-      { text: `➕ Sepete Ekle`, callback_data: `add:${product.id}` }
-    ],
-    [
-      { text: `🔙 Kategoriye Dön`, callback_data: `cat:${product.category_id}` }
-    ]
+    cartRow,
+    [{ text: `🔙 ${escapeHtml(getCategoryName({ id: product.category_id }, lang) || 'Kategori')}`, callback_data: `cat:${product.category_id}` }]
   ]
 
   await sendOrEditPhotoMessage(token, chatId, productPhoto, text, { inline_keyboard: inlineKeyboard }, messageId)
