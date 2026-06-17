@@ -13,6 +13,11 @@ export interface MenuProduct {
   is_active: boolean
   stock_count: number | null
   category_id: string
+  calories: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
+  ingredients: string
 }
 
 export interface MenuCategory {
@@ -116,6 +121,16 @@ export async function fetchBranchMenu(
         description = prod.description_ka || prod.description_en || prod.description_tr || ''
       }
 
+      // Seçilen dile göre içindekiler alanını da seçelim
+      let ingredients = prod.ingredients_tr || prod.ingredients_en || prod.ingredients_ka || ''
+      if (language === 'en') {
+        ingredients = prod.ingredients_en || prod.ingredients_tr || prod.ingredients_ka || ''
+      } else if (language === 'ru') {
+        ingredients = prod.ingredients_ru || prod.ingredients_en || prod.ingredients_tr || ''
+      } else if (language === 'ka') {
+        ingredients = prod.ingredients_ka || prod.ingredients_en || prod.ingredients_tr || ''
+      }
+
       return {
         id: prod.id,
         name,
@@ -128,7 +143,12 @@ export async function fetchBranchMenu(
         is_vegetarian: prod.is_vegetarian || false,
         is_active: isBranchActive && prod.is_active,
         stock_count,
-        category_id: prod.category_id
+        category_id: prod.category_id,
+        calories: prod.calories || null,
+        protein_g: prod.protein_g ? Number(prod.protein_g) : null,
+        carbs_g: prod.carbs_g ? Number(prod.carbs_g) : null,
+        fat_g: prod.fat_g ? Number(prod.fat_g) : null,
+        ingredients: ingredients || ''
       }
     })
     // Sadece aktif ve stokta olan veya (stok count null/pozitif) olan ürünleri filtrele

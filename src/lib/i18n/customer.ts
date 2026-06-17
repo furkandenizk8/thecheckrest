@@ -38,6 +38,16 @@ export const translations = {
     trackStatus: 'Sipariş Durumunu Takip Et',
     close: 'Kapat',
     
+    // Besin Değerleri & Kalori Arayüzü
+    nutrition: 'Besin Değerleri',
+    ingredients: 'İçindekiler',
+    caloriesText: 'Enerji (Kalori)',
+    proteinText: 'Protein',
+    carbsText: 'Karbonhidrat',
+    fatText: 'Yağ',
+    viewDetails: 'Ürün Bilgisi',
+    noNutritionData: 'Bu ürüne ait kalori bilgisi tanımlanmamıştır.',
+    
     // Hızlı İstek Butonları
     callWaiter: 'Garson Çağır',
     callBill: 'Hesap İste',
@@ -89,6 +99,16 @@ export const translations = {
     orderSuccessDesc: 'Your order has been sent to the kitchen and preparation has started.',
     trackStatus: 'Track Order Status',
     close: 'Close',
+    
+    // Nutrition & Calories
+    nutrition: 'Nutrition Facts',
+    ingredients: 'Ingredients',
+    caloriesText: 'Energy (Calories)',
+    proteinText: 'Protein',
+    carbsText: 'Carbs',
+    fatText: 'Fat',
+    viewDetails: 'Product Info',
+    noNutritionData: 'No nutrition facts available for this product.',
     
     // Quick Service Buttons
     callWaiter: 'Call Waiter',
@@ -142,6 +162,16 @@ export const translations = {
     trackStatus: 'Отслеживать статус заказа',
     close: 'Закрыть',
     
+    // Nutrition & Calories
+    nutrition: 'Пищевая ценность',
+    ingredients: 'Ингредиенты',
+    caloriesText: 'Энергия (Калории)',
+    proteinText: 'Белки',
+    carbsText: 'Углеводы',
+    fatText: 'Жиры',
+    viewDetails: 'Инфо о продукте',
+    noNutritionData: 'Информация о пищевой ценности для этого продукта отсутствует.',
+    
     // Quick Service Buttons
     callWaiter: 'Вызвать официанта',
     callBill: 'Запросить счет',
@@ -193,6 +223,16 @@ export const translations = {
     orderSuccessDesc: 'თქვენი შეკვეთა გადაიგზავნა სამზარეულოში, მომზადება დაიწყო.',
     trackStatus: 'შეკვეთის სტატუსის თვალყურის დევნება',
     close: 'დახურვა',
+    
+    // Nutrition & Calories
+    nutrition: 'კვებითი ღირებულება',
+    ingredients: 'შემადგენლობა',
+    caloriesText: 'კალორია',
+    proteinText: 'ცილა',
+    carbsText: 'ნახშირწყლები',
+    fatText: 'ცხიმი',
+    viewDetails: 'ინფორმაცია',
+    noNutritionData: 'ამ პროდუქტისთვის ინფორმაცია არ არის ხელმისაწვდომი.',
     
     // Quick Service Buttons
     callWaiter: 'ოფიციანტის გამოძახება',

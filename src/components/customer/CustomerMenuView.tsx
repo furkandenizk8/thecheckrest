@@ -8,7 +8,7 @@ import { placeCustomerOrder, createServiceRequest } from '@/app/actions/customer
 import { 
   Utensils, Sparkles, Bell, ShoppingBag, Plus, Minus, 
   ChevronRight, X, MessageSquare, Flame, Leaf, Clock, 
-  HelpCircle, AlertCircle, CheckCircle2, User
+  HelpCircle, AlertCircle, CheckCircle2, User, Info
 } from 'lucide-react'
 
 interface CustomerMenuViewProps {
@@ -58,6 +58,9 @@ export default function CustomerMenuView({
   const [requestModalOpen, setRequestModalOpen] = useState(false)
   const [requestLoading, setRequestLoading] = useState<string | null>(null)
   const [requestSuccessMessage, setRequestSuccessMessage] = useState('')
+
+  // Product Detail Modal State
+  const [detailProduct, setDetailProduct] = useState<MenuProduct | null>(null)
 
   // Category Scrolling Ref
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -271,7 +274,8 @@ export default function CustomerMenuView({
                   return (
                     <div 
                       key={prod.id}
-                      className="bg-zinc-900/40 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-3 flex gap-3 relative overflow-hidden transition duration-300"
+                      onClick={() => setDetailProduct(prod)}
+                      className="bg-zinc-900/40 border border-zinc-900 hover:border-zinc-800/80 rounded-2xl p-3 flex gap-3 relative overflow-hidden transition duration-300 cursor-pointer active:bg-zinc-900/70"
                     >
                       {/* Ürün Görseli veya Varsayılan İkon */}
                       <div className="w-20 h-20 bg-zinc-950 rounded-xl flex items-center justify-center shrink-0 border border-zinc-800/50 overflow-hidden relative">
@@ -304,15 +308,18 @@ export default function CustomerMenuView({
                       {/* Ürün Detayları */}
                       <div className="flex-1 flex flex-col justify-between min-w-0">
                         <div>
-                          <h3 className="text-sm font-bold text-white truncate leading-snug">
-                            {prod.name}
-                          </h3>
+                          <div className="flex items-start justify-between gap-1">
+                            <h3 className="text-sm font-bold text-white truncate leading-snug flex-1">
+                              {prod.name}
+                            </h3>
+                            <Info className="w-3.5 h-3.5 text-zinc-600 shrink-0 mt-0.5" />
+                          </div>
                           <p className="text-[11px] text-zinc-500 line-clamp-2 mt-0.5 leading-relaxed">
                             {prod.description}
                           </p>
                         </div>
 
-                        <div className="flex items-end justify-between mt-2">
+                        <div className="flex items-end justify-between mt-2" onClick={(e) => e.stopPropagation()}>
                           <span className="text-sm font-black text-amber-500">
                             {prod.price.toFixed(2)} <span className="text-xs font-normal text-zinc-400">{tableDetails.currency}</span>
                           </span>
@@ -582,6 +589,201 @@ export default function CustomerMenuView({
         </div>
       )}
       
+      {/* 8. Ürün Detay ve Kalori/Besin Değerleri Modali (Slide Up Drawer) */}
+      {detailProduct && (() => {
+        const cartItem = cart.find((item) => item.product.id === detailProduct.id)
+        const count = cartItem ? cartItem.quantity : 0
+        const hasNutrition = detailProduct.calories !== null
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex justify-center items-end" onClick={() => setDetailProduct(null)}>
+            <div 
+              className="w-full max-w-md bg-zinc-950 border-t border-zinc-800 rounded-t-[2.5rem] p-6 max-h-[92vh] flex flex-col justify-between shadow-2xl relative overflow-y-auto scrollbar-none animate-slide-up"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Kapatma ve Kaydırma Çubuğu */}
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 w-12 h-1 bg-zinc-800 rounded-full" />
+              
+              <div className="flex justify-between items-center mb-4 mt-2">
+                <span className="text-xs font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {t.viewDetails}
+                </span>
+                <button 
+                  onClick={() => setDetailProduct(null)}
+                  className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Detay İçeriği */}
+              <div className="space-y-6 flex-1 overflow-y-auto pr-1 scrollbar-none pb-6">
+                
+                {/* Görsel */}
+                <div className="w-full h-48 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800/80 relative flex items-center justify-center">
+                  {detailProduct.photo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img 
+                      src={detailProduct.photo_url} 
+                      alt={detailProduct.name} 
+                      className="w-full h-full object-cover" 
+                    />
+                  ) : (
+                    <Utensils className="w-12 h-12 text-zinc-850" />
+                  )}
+
+                  {/* Rozetler */}
+                  <div className="absolute bottom-3 left-3 flex gap-1.5">
+                    {detailProduct.is_spicy && (
+                      <span className="px-2.5 py-1 rounded-full bg-red-950/90 border border-red-900/30 text-red-400 text-[10px] font-black flex items-center gap-1">
+                        🔥 {t.spicy}
+                      </span>
+                    )}
+                    {detailProduct.is_vegetarian && (
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-950/90 border border-emerald-900/30 text-emerald-400 text-[10px] font-black flex items-center gap-1">
+                        🌿 {t.vegetarian}
+                      </span>
+                    )}
+                    <span className="px-2.5 py-1 rounded-full bg-zinc-950/90 border border-zinc-800/80 text-zinc-400 text-[10px] font-bold flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-zinc-500" />
+                      {detailProduct.prep_time_minutes} {t.minutes.slice(0,2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ürün İsmi ve Fiyatı */}
+                <div className="flex justify-between items-start gap-4">
+                  <div>
+                    <h2 className="text-xl font-extrabold text-white leading-tight">
+                      {detailProduct.name}
+                    </h2>
+                    <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                      {detailProduct.description}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-lg font-black text-amber-500">
+                      {detailProduct.price.toFixed(2)} <span className="text-xs font-normal text-zinc-400">{tableDetails.currency}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* İçindekiler Bölümü */}
+                {detailProduct.ingredients && (
+                  <div className="bg-zinc-900/40 border border-zinc-900/80 rounded-2xl p-4 space-y-2">
+                    <h3 className="text-xs font-bold text-zinc-400 tracking-wide uppercase">
+                      {t.ingredients}
+                    </h3>
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      {detailProduct.ingredients}
+                    </p>
+                  </div>
+                )}
+
+                {/* Besin Değerleri Bölümü */}
+                <div className="bg-zinc-900/40 border border-zinc-900/80 rounded-2xl p-4 space-y-3">
+                  <h3 className="text-xs font-bold text-zinc-400 tracking-wide uppercase flex justify-between items-center">
+                    <span>{t.nutrition}</span>
+                    {hasNutrition && (
+                      <span className="text-[10px] font-bold text-amber-500">
+                        {detailProduct.calories} Kcal
+                      </span>
+                    )}
+                  </h3>
+
+                  {hasNutrition ? (
+                    <div className="grid grid-cols-4 gap-2 text-center">
+                      {/* Kalori */}
+                      <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-2">
+                        <p className="text-[9px] font-bold text-zinc-500 uppercase">{t.caloriesText.slice(0,7)}</p>
+                        <p className="text-sm font-black text-amber-500 mt-1">{detailProduct.calories}</p>
+                        <p className="text-[8px] text-zinc-600">kcal</p>
+                      </div>
+                      {/* Protein */}
+                      <div className="bg-blue-500/5 border border-blue-500/15 rounded-xl p-2">
+                        <p className="text-[9px] font-bold text-zinc-500 uppercase">{t.proteinText}</p>
+                        <p className="text-sm font-black text-blue-400 mt-1">{(detailProduct.protein_g ?? 0).toFixed(1)}</p>
+                        <p className="text-[8px] text-zinc-600">gram</p>
+                      </div>
+                      {/* Karbonhidrat */}
+                      <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-2">
+                        <p className="text-[9px] font-bold text-zinc-500 uppercase">{t.carbsText.slice(0,5)}.</p>
+                        <p className="text-sm font-black text-emerald-400 mt-1">{(detailProduct.carbs_g ?? 0).toFixed(1)}</p>
+                        <p className="text-[8px] text-zinc-600">gram</p>
+                      </div>
+                      {/* Yağ */}
+                      <div className="bg-red-500/5 border border-red-500/15 rounded-xl p-2">
+                        <p className="text-[9px] font-bold text-zinc-500 uppercase">{t.fatText}</p>
+                        <p className="text-sm font-black text-red-400 mt-1">{(detailProduct.fat_g ?? 0).toFixed(1)}</p>
+                        <p className="text-[8px] text-zinc-600">gram</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-zinc-600 italic">
+                      {t.noNutritionData}
+                    </p>
+                  )}
+                </div>
+
+                {/* Alerjenler Bölümü */}
+                {detailProduct.allergens && detailProduct.allergens.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold text-zinc-500 tracking-wide uppercase">
+                      {t.allergens}
+                    </h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detailProduct.allergens.map((alg) => (
+                        <span key={alg} className="bg-red-950/20 border border-red-900/30 text-red-400 text-[10px] px-2.5 py-1 rounded-lg font-bold capitalize">
+                          ⚠️ {alg}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+              {/* Alt Buton ve Adet Kontrolü */}
+              <div className="border-t border-zinc-900 pt-4 mt-2">
+                {count > 0 ? (
+                  <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-2xl p-2 text-amber-500">
+                    <button 
+                      onClick={() => updateQuantity(detailProduct.id, -1)}
+                      className="p-2 hover:bg-zinc-950 rounded-xl active:scale-90"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <div className="text-center">
+                      <span className="text-sm font-black text-white block">
+                        {count} {sessionInfo.language === 'en' ? 'Items in Cart' : 'Adet Sepette'}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={() => addToCart(detailProduct)}
+                      className="p-2 hover:bg-zinc-950 rounded-xl active:scale-90"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      addToCart(detailProduct)
+                      setDetailProduct(null) // Modali kapat
+                    }}
+                    className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold py-3.5 rounded-2xl transition duration-300 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{t.addToCart}</span>
+                  </button>
+                )}
+              </div>
+
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
