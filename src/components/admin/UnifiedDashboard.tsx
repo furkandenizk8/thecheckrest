@@ -55,7 +55,8 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
     activeRequests: any[]
     activeOrders: any[]
     stations: any[]
-  }>({ tables: [], activeSessions: [], openBills: [], activeRequests: [], activeOrders: [], stations: [] })
+    zones: any[]
+  }>({ tables: [], activeSessions: [], openBills: [], activeRequests: [], activeOrders: [], stations: [], zones: [] })
 
   const [selectedStationId, setSelectedStationId] = useState<string>('all')
 
@@ -401,8 +402,21 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
                     <p className="text-xs text-zinc-500">Masa durumlarını ve anlık garson çağrılarını takip edin</p>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    {data.tables.map(table => {
+                  {(() => {
+                    // Bölgeye göre gruplandır — data.zones'u kullan (sort_order sıralı)
+                    const hasZones = data.zones.length > 0
+                    const groups: { zoneId: string | null; zoneName: string | null; tables: any[] }[] = []
+                    if (hasZones) {
+                      data.zones.forEach((z: any) => {
+                        const zoneTables = data.tables.filter(t => t.zone_id === z.id)
+                        if (zoneTables.length > 0) groups.push({ zoneId: z.id, zoneName: z.name_tr, tables: zoneTables })
+                      })
+                    }
+                    const unzoned = data.tables.filter(t => !t.zone_id)
+                    if (unzoned.length > 0) groups.push({ zoneId: null, zoneName: null, tables: unzoned })
+                    if (!hasZones) groups.splice(0, groups.length, { zoneId: null, zoneName: null, tables: data.tables })
+
+                    const renderTable = (table: any) => {
                       const tableBill = data.openBills.find(b => b.table_id === table.id)
                       const tableSessions = data.activeSessions.filter(s => s.table_id === table.id)
                       const isSelected = selectedTableId === table.id
@@ -439,8 +453,29 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
                           </div>
                         </button>
                       )
-                    })}
-                  </div>
+                    }
+
+                    return (
+                      <div className="space-y-6">
+                        {groups.map(g => (
+                          <div key={g.zoneId ?? '__unzoned__'}>
+                            {hasZones && (
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-xs font-bold text-zinc-300">
+                                  {g.zoneName ?? 'Bölge Atanmamış'}
+                                </span>
+                                <span className="text-[10px] text-zinc-600">{g.tables.length} masa</span>
+                                <div className="flex-1 h-px bg-zinc-800" />
+                              </div>
+                            )}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                              {g.tables.map(renderTable)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
 
                   {/* Quick Actions — seçili masa */}
                   {selectedTableId && (() => {

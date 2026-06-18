@@ -209,6 +209,7 @@ export async function fetchUnifiedDashboardData(branchId: string) {
     { data: activeRequests },
     { data: activeOrders },
     { data: stations },
+    { data: zones },
   ] = await Promise.all([
     supabase
       .from('tables')
@@ -266,6 +267,13 @@ export async function fetchUnifiedDashboardData(branchId: string) {
       .eq('branch_id', branchId)
       .eq('is_active', true)
       .order('sort_order', { ascending: true }),
+
+    supabase
+      .from('zones')
+      .select('id, name_tr, name_en, name_ka, name_ru, telegram_chat_id, sort_order')
+      .eq('branch_id', branchId)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true }),
   ])
 
   return {
@@ -275,6 +283,7 @@ export async function fetchUnifiedDashboardData(branchId: string) {
     activeRequests: activeRequests || [],
     activeOrders: activeOrders || [],
     stations: stations || [],
+    zones: (zones as any) || [],
   }
 }
 
