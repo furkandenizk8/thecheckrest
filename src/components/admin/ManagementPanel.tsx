@@ -2,19 +2,21 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ChefHat, UtensilsCrossed, Settings, Layers, MapPin } from 'lucide-react'
+import { ArrowLeft, ChefHat, UtensilsCrossed, Settings, Layers, MapPin, SlidersHorizontal } from 'lucide-react'
 import MenuManagement from './MenuManagement'
 import TableConfig from './TableConfig'
 import StationManagement from './StationManagement'
 import ZoneManagement from './ZoneManagement'
+import BranchSettings from './BranchSettings'
 
-type Tab = 'menu' | 'tables' | 'stations' | 'zones'
+type Tab = 'menu' | 'tables' | 'stations' | 'zones' | 'settings'
 
 const TABS: { id: Tab; label: string; icon: React.FC<{ className?: string }> }[] = [
   { id: 'menu',     label: 'Menü Yönetimi', icon: UtensilsCrossed },
   { id: 'tables',   label: 'Masa Ayarları', icon: Settings },
   { id: 'stations', label: 'Birimler',       icon: Layers },
   { id: 'zones',    label: 'Bölgeler',       icon: MapPin },
+  { id: 'settings', label: 'Ayarlar',        icon: SlidersHorizontal },
 ]
 
 export default function ManagementPanel({ defaultTab = 'menu' }: { defaultTab?: Tab }) {
@@ -69,6 +71,7 @@ export default function ManagementPanel({ defaultTab = 'menu' }: { defaultTab?: 
           {activeTab === 'tables'   && <TableConfig embedded />}
           {activeTab === 'stations' && <StationManagement embedded />}
           {activeTab === 'zones'    && <ZoneManagement embedded />}
+          {activeTab === 'settings' && <BranchSettings embedded />}
         </div>
       </div>
     </div>

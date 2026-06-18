@@ -403,7 +403,17 @@ export async function POST(request: Request) {
         const rating = parseInt(survParts[1] || '0')
         const survLang = survParts[2] || 'tr'
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
-        const googleUrl = process.env.GOOGLE_REVIEWS_URL || ''
+        // Önce son aktif session'dan branch bul, yoksa env var'a düş
+        const { data: lastSession } = await supabase
+          .from('table_sessions')
+          .select('tables(branches(google_reviews_url))')
+          .eq('device_id', `tg_${chatId}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        const googleUrl: string =
+          (lastSession?.tables as any)?.branches?.google_reviews_url ||
+          process.env.GOOGLE_REVIEWS_URL || ''
         let replyText: string
         if (rating >= 4) {
           replyText = survLang === 'en'

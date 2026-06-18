@@ -194,6 +194,25 @@ export async function fetchBranchesAction() {
   return data || []
 }
 
+export async function fetchBranchSettingsAction(branchId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from('branches')
+    .select('id, name, currency, service_fee_percent, google_reviews_url')
+    .eq('id', branchId)
+    .single()
+  return data
+}
+
+export async function updateBranchSettingsAction(branchId: string, settings: { google_reviews_url?: string }) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { error } = await supabase.from('branches').update(settings).eq('id', branchId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
 export async function fetchUnifiedDashboardData(branchId: string) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
@@ -621,7 +640,14 @@ export async function payBillAction(billId: string, amount: number, method: 'cas
     ).catch(console.error)
 
     // Memnuniyet anketi — Telegram müşterilerine gönder
-    // Google Reviews URL'si GOOGLE_REVIEWS_URL env var'dan okunur (webhook tarafında da)
+    // Google Reviews URL: önce branch kaydından, yoksa env var'dan
+    const { data: branchRow } = await supabase
+      .from('tables')
+      .select('branches(google_reviews_url)')
+      .eq('id', bill.table_id)
+      .single()
+    const googleReviewsUrl: string = (branchRow?.branches as any)?.google_reviews_url || process.env.GOOGLE_REVIEWS_URL || ''
+
     if (activeSessions) {
       const { sendTelegramMessageWithButtons } = await import('@/lib/telegram')
       for (const sess of activeSessions) {
