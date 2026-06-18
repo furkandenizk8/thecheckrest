@@ -1306,16 +1306,28 @@ async function handleServiceRequest(
   const customerName = session.customer_name || 'Müşteri'
   const reqInfo = STAFF_REQUEST_LABELS[type] || { label: type, icon: '🔔' }
 
-  const alertMessage = `🚨 <b>Masa Talebi (Telegram Chat)!</b>
+  // Zone routing: masanın zone'una bak, varsa o zone'un telegram_chat_id'sine gönder
+  let zoneChatId: string | undefined
+  if (session.table_id) {
+    const { data: tableRow } = await supabaseClient()
+      .from('tables')
+      .select('zone_id, zones(telegram_chat_id)')
+      .eq('id', session.table_id)
+      .maybeSingle()
+    const zoneChat = (tableRow?.zones as any)?.telegram_chat_id
+    if (zoneChat) zoneChatId = zoneChat
+  }
+
+  const alertMessage = `🚨 <b>Masa Talebi!</b>
 ━━━━━━━━━━━━━━━━━
 🏢 <b>Şube:</b> ${escapeHtml(branchName)}
 🎯 <b>Masa:</b> ${escapeHtml(tableName)}
-👤 <b>Müşteri:</b> ${escapeHtml(customerName)} (Telegram Chat)
+👤 <b>Müşteri:</b> ${escapeHtml(customerName)}
 ━━━━━━━━━━━━━━━━━
 🔔 <b>Talep:</b> ${reqInfo.icon} <b>${escapeHtml(reqInfo.label)}</b>`
 
   const { sendTelegramNotification } = await import('@/lib/telegram')
-  await sendTelegramNotification(alertMessage)
+  await sendTelegramNotification(alertMessage, zoneChatId)
 
   const successText = getT(lang, 'serviceRequestSent', { type: reqInfo.label })
 

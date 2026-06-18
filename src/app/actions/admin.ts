@@ -761,19 +761,19 @@ export async function fetchTablesConfigAction(branchId: string) {
   return data || []
 }
 
-export async function createTableAction(branchId: string, data: { name: string; capacity: number }) {
+export async function createTableAction(branchId: string, data: { name: string; capacity: number; zone_id?: string }) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
   const { data: table, error } = await supabase
     .from('tables')
-    .insert({ branch_id: branchId, name: data.name, capacity: data.capacity, status: 'empty', is_active: true })
+    .insert({ branch_id: branchId, name: data.name, capacity: data.capacity, zone_id: data.zone_id || null, status: 'empty', is_active: true })
     .select('id, qr_token')
     .single()
   if (error) return { success: false, error: error.message }
   return { success: true, id: table.id, qrToken: table.qr_token }
 }
 
-export async function updateTableAction(tableId: string, data: { name?: string; capacity?: number; is_active?: boolean }) {
+export async function updateTableAction(tableId: string, data: { name?: string; capacity?: number; is_active?: boolean; zone_id?: string | null }) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
   const { error } = await supabase.from('tables').update(data).eq('id', tableId)
@@ -843,6 +843,57 @@ export async function deleteStationAction(stationId: string) {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
   const { error } = await supabase.from('stations').delete().eq('id', stationId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+// ========== BÖLGE (ZONE) YÖNETİMİ ==========
+
+export async function fetchZonesAction(branchId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { data } = await supabase
+    .from('zones')
+    .select('*')
+    .eq('branch_id', branchId)
+    .order('sort_order', { ascending: true })
+  return data || []
+}
+
+export async function createZoneAction(
+  branchId: string,
+  data: { name_tr: string; name_en?: string; name_ka?: string; name_ru?: string; telegram_chat_id?: string; sort_order?: number }
+) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { error } = await supabase.from('zones').insert({
+    branch_id: branchId,
+    name_tr: data.name_tr,
+    name_en: data.name_en || data.name_tr,
+    name_ka: data.name_ka || data.name_tr,
+    name_ru: data.name_ru || data.name_tr,
+    telegram_chat_id: data.telegram_chat_id || null,
+    sort_order: data.sort_order ?? 0,
+  })
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+export async function updateZoneAction(
+  zoneId: string,
+  data: { name_tr?: string; name_en?: string; name_ka?: string; name_ru?: string; telegram_chat_id?: string; sort_order?: number; is_active?: boolean }
+) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { error } = await supabase.from('zones').update(data).eq('id', zoneId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
+export async function deleteZoneAction(zoneId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { error } = await supabase.from('zones').delete().eq('id', zoneId)
   if (error) return { success: false, error: error.message }
   return { success: true }
 }

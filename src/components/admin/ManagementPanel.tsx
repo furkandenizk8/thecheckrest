@@ -2,17 +2,19 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ChefHat, UtensilsCrossed, Settings, Layers } from 'lucide-react'
+import { ArrowLeft, ChefHat, UtensilsCrossed, Settings, Layers, MapPin } from 'lucide-react'
 import MenuManagement from './MenuManagement'
 import TableConfig from './TableConfig'
 import StationManagement from './StationManagement'
+import ZoneManagement from './ZoneManagement'
 
-type Tab = 'menu' | 'tables' | 'stations'
+type Tab = 'menu' | 'tables' | 'stations' | 'zones'
 
 const TABS: { id: Tab; label: string; icon: React.FC<{ className?: string }> }[] = [
   { id: 'menu',     label: 'Menü Yönetimi', icon: UtensilsCrossed },
   { id: 'tables',   label: 'Masa Ayarları', icon: Settings },
   { id: 'stations', label: 'Birimler',       icon: Layers },
+  { id: 'zones',    label: 'Bölgeler',       icon: MapPin },
 ]
 
 export default function ManagementPanel({ defaultTab = 'menu' }: { defaultTab?: Tab }) {
@@ -66,6 +68,7 @@ export default function ManagementPanel({ defaultTab = 'menu' }: { defaultTab?: 
           {activeTab === 'menu'     && <MenuManagement embedded />}
           {activeTab === 'tables'   && <TableConfig embedded />}
           {activeTab === 'stations' && <StationManagement embedded />}
+          {activeTab === 'zones'    && <ZoneManagement embedded />}
         </div>
       </div>
     </div>

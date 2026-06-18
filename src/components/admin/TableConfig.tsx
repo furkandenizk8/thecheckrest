@@ -10,6 +10,7 @@ import {
   deleteTableAction,
   resetTableAction,
   getTableQRAction,
+  fetchZonesAction,
 } from '@/app/actions/admin'
 import {
   ChefHat,
@@ -36,6 +37,7 @@ interface Table {
   status: string
   is_active: boolean
   qr_token: string
+  zone_id?: string | null
 }
 
 // ─── QR Modal ─────────────────────────────────────────────────────────────────
@@ -111,11 +113,13 @@ function QRModal({ tableId, onClose }: { tableId: string; onClose: () => void })
 function TableModal({
   table,
   branchId,
+  zones,
   onClose,
   onSaved,
 }: {
   table: Table | null
   branchId: string
+  zones: any[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -126,6 +130,7 @@ function TableModal({
     name:      table?.name ?? '',
     capacity:  table?.capacity?.toString() ?? '4',
     is_active: table?.is_active ?? true,
+    zone_id:   table?.zone_id ?? '',
   })
 
   const set = (key: keyof typeof form, value: any) => setForm(f => ({ ...f, [key]: value }))
@@ -137,9 +142,18 @@ function TableModal({
     try {
       let res: any
       if (isEdit && table) {
-        res = await updateTableAction(table.id, { name: form.name, capacity: Number(form.capacity), is_active: form.is_active })
+        res = await updateTableAction(table.id, {
+          name: form.name,
+          capacity: Number(form.capacity),
+          is_active: form.is_active,
+          zone_id: form.zone_id || null,
+        })
       } else {
-        res = await createTableAction(branchId, { name: form.name, capacity: Number(form.capacity) })
+        res = await createTableAction(branchId, {
+          name: form.name,
+          capacity: Number(form.capacity),
+          zone_id: form.zone_id || undefined,
+        })
       }
       if (!res.success) { setError(res.error || 'Bir hata oluştu.'); return }
       onSaved()
@@ -171,6 +185,22 @@ function TableModal({
             <input type="number" min="1" max="100" value={form.capacity} onChange={e => set('capacity', e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none transition" />
           </div>
+
+          {zones.length > 0 && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase">Bölge</label>
+              <select
+                value={form.zone_id}
+                onChange={e => set('zone_id', e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none transition"
+              >
+                <option value="">— Bölge Yok —</option>
+                {zones.map(z => (
+                  <option key={z.id} value={z.id}>{z.name_tr}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {isEdit && (
             <button type="button" onClick={() => set('is_active', !form.is_active)}
@@ -207,6 +237,7 @@ export default function TableConfig({ embedded }: { embedded?: boolean }) {
   const [branches, setBranches] = useState<any[]>([])
   const [selectedBranchId, setSelectedBranchId] = useState('')
   const [tables, setTables] = useState<Table[]>([])
+  const [zones, setZones] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const [tableModal, setTableModal] = useState<{ open: boolean; table: Table | null }>({ open: false, table: null })
@@ -222,8 +253,12 @@ export default function TableConfig({ embedded }: { embedded?: boolean }) {
   const reload = useCallback(async () => {
     if (!selectedBranchId) return
     setLoading(true)
-    const data = await fetchTablesConfigAction(selectedBranchId)
-    setTables(data)
+    const [tableData, zoneData] = await Promise.all([
+      fetchTablesConfigAction(selectedBranchId),
+      fetchZonesAction(selectedBranchId),
+    ])
+    setTables(tableData)
+    setZones(zoneData)
     setLoading(false)
   }, [selectedBranchId])
 
@@ -332,6 +367,14 @@ export default function TableConfig({ embedded }: { embedded?: boolean }) {
                     <div className="flex items-center gap-1 mt-0.5 text-[9px] text-zinc-500">
                       <Users className="w-2.5 h-2.5" /> {table.capacity} kişi
                     </div>
+                    {table.zone_id && (() => {
+                      const zone = zones.find(z => z.id === table.zone_id)
+                      return zone ? (
+                        <div className="flex items-center gap-1 mt-0.5 text-[9px] text-amber-500/70">
+                          <MapPin className="w-2.5 h-2.5" /> {zone.name_tr}
+                        </div>
+                      ) : null
+                    })()}
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
                     <button
@@ -395,6 +438,7 @@ export default function TableConfig({ embedded }: { embedded?: boolean }) {
         <TableModal
           table={tableModal.table}
           branchId={selectedBranchId}
+          zones={zones}
           onClose={() => setTableModal({ open: false, table: null })}
           onSaved={reload}
         />
