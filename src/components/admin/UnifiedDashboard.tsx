@@ -13,7 +13,8 @@ import {
   completeServiceRequestAction,
   resetTableAction,
   updateTableStatusAction,
-  payBillAction
+  payBillAction,
+  resendServiceRequestNotificationAction,
 } from '@/app/actions/admin'
 import {
   ChefHat,
@@ -59,6 +60,8 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
   }>({ tables: [], activeSessions: [], openBills: [], activeRequests: [], activeOrders: [], stations: [], zones: [] })
 
   const [selectedStationId, setSelectedStationId] = useState<string>('all')
+  // requestId → son bildirim zamanı (ms), 60sn cooldown
+  const [resendCooldowns, setResendCooldowns] = useState<Record<string, number>>({})
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -814,6 +817,26 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] text-zinc-500">{timeStr}</span>
+                              {/* Tekrar Bildir — 60sn cooldown */}
+                              {(() => {
+                                const lastSent = resendCooldowns[req.id] || 0
+                                const elapsed = Date.now() - lastSent
+                                const onCooldown = elapsed < 60_000
+                                const remaining = Math.ceil((60_000 - elapsed) / 1000)
+                                return (
+                                  <button
+                                    disabled={onCooldown}
+                                    onClick={async () => {
+                                      setResendCooldowns(p => ({ ...p, [req.id]: Date.now() }))
+                                      await resendServiceRequestNotificationAction(req.id)
+                                    }}
+                                    className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 hover:text-zinc-200 text-[10px] font-bold px-2.5 py-1.5 rounded-xl flex items-center gap-1 active:scale-[0.98] transition disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title={onCooldown ? `${remaining}sn sonra tekrar gönderebilirsin` : 'Tekrar bildirim gönder'}
+                                  >
+                                    🔔 {onCooldown ? `${remaining}s` : 'Tekrar'}
+                                  </button>
+                                )
+                              })()}
                               {!isAcknowledged ? (
                                 <button
                                   onClick={() => handleAcknowledgeRequest(req.id)}

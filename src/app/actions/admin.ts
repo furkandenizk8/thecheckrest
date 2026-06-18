@@ -906,3 +906,52 @@ export async function deleteZoneAction(zoneId: string) {
   if (error) return { success: false, error: error.message }
   return { success: true }
 }
+
+export async function resendServiceRequestNotificationAction(requestId: string) {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+
+  const { data: req, error } = await supabase
+    .from('service_requests')
+    .select(`
+      *,
+      tables (
+        name,
+        zone_id,
+        zones ( telegram_chat_id ),
+        branches ( name )
+      ),
+      table_sessions ( customer_name )
+    `)
+    .eq('id', requestId)
+    .single()
+
+  if (error || !req) return { success: false, error: 'Talep bulunamadı.' }
+
+  const LABELS: Record<string, { label: string; icon: string }> = {
+    waiter:   { label: 'Garson Çağır',     icon: '🙋‍♂️' },
+    bill:     { label: 'Hesap İste',       icon: '🧾' },
+    napkin:   { label: 'Peçete İste',      icon: '🧻' },
+    water:    { label: 'Su İste',          icon: '💧' },
+    salt:     { label: 'Tuz/Karabiber',    icon: '🧂' },
+    cutlery:  { label: 'Çatal / Bıçak',   icon: '🍴' },
+    cleaning: { label: 'Temizlik Talebi',  icon: '🧹' },
+  }
+  const { label, icon } = LABELS[req.type] || { label: req.type, icon: '🔔' }
+  const tableName   = (req.tables as any)?.name || 'Masa'
+  const branchName  = (req.tables as any)?.branches?.name || ''
+  const customer    = (req.table_sessions as any)?.customer_name || 'Müşteri'
+  const zoneChatId  = (req.tables as any)?.zones?.telegram_chat_id as string | undefined
+
+  const message = `🔁 <b>TEKRAR: Masa Talebi!</b>
+━━━━━━━━━━━━━━━━━
+${branchName ? `🏢 <b>Şube:</b> ${branchName}\n` : ''}🎯 <b>Masa:</b> ${tableName}
+👤 <b>Müşteri:</b> ${customer}
+━━━━━━━━━━━━━━━━━
+🔔 <b>Talep:</b> ${icon} <b>${label}</b>`
+
+  const { sendTelegramNotification } = await import('@/lib/telegram')
+  await sendTelegramNotification(message, zoneChatId)
+
+  return { success: true }
+}
