@@ -1,3 +1,139 @@
+## 2026-06-18 — Oturum 10: Bug Fix + Telegram Garson İşlemleri + Memnuniyet Anketi
+
+### Yapılanlar
+- **lib/telegram.ts** — `sendTelegramMessageWithButtons(message, replyMarkup, chatId)` yeni fonksiyon: inline keyboard ile mesaj gönderme, message_id döner
+- **webhook/route.ts — srvack/srvdone handler**: Zone kanalındaki "👀 Gördüm" ve "✅ Tamamlandı" butonları artık session lookup olmadan işleniyor — garsonlar web'e girmeden Telegram'dan talepleri tamamlayabilir
+- **webhook/route.ts — survey handler**: Ödeme sonrası müşteriye 1-5 ⭐ anket gelir; 4-5 ise Google Yorum linki (`GOOGLE_REVIEWS_URL` env var) gösterilir; session deaktif olduğu için oturuma gerek yok
+- **webhook/route.ts — handleServiceRequest**: Zone bildirimleri artık "👀 Gördüm" + "✅ Tamamlandı" butonlarıyla — `srvack:{id}` ve `srvdone:{id}` callback
+- **webhook/route.ts — handlePaymentRequest**: `notes` kolonu olmadığı için insert sessizce başarısız oluyordu — `type` alanını `bill_cash`/`bill_card` olarak değiştirdik, `notes` kaldırıldı; hata mesajı kullanıcıya gösteriliyor
+- **webhook/route.ts — ikram:yes**: Doğrudan kayıt yerine kaç kişilik çay sorusu: 1-5 butonlu sayı seçici → `ikram:count:{n}` → N adet ikram_cay kaydı → zone bildirimi + butonlar
+- **admin.ts — payBillAction**: Ödeme tamamlanınca masanın tüm siparişleri `delivered` yapılıyor (mutfak ekranı temizleniyor)
+- **admin.ts — payBillAction**: Ödeme sonrası Telegram müşterilerine memnuniyet anketi gönderiliyor
+- **UnifiedDashboard.tsx**: `bill_cash` → "Hesap — 💵 Nakit", `bill_card` → "Hesap — 💳 Kart/POS", `ikram_cay` → "☕ Çay İkramı" label'ları eklendi
+
+### Proje Durumu
+- [x] Garson isteklerini Telegram'dan tamamlama (srvack/srvdone)
+- [x] Ödeme butonu sessiz hata düzeltildi (bill_cash/bill_card type)
+- [x] Çay miktarı sorma (1-5 picker)
+- [x] Mutfak ekranı ödeme sonrası temizleniyor
+- [x] Memnuniyet anketi + Google Yorum yönlendirmesi
+- [ ] `GOOGLE_REVIEWS_URL` env var'ı Vercel'e eklenmeli
+- [ ] Supabase migrations 005-008 Dashboard'dan uygulanmalı
+
+### Kritik Kararlar / Notlar
+- `service_requests.notes` kolonu schema'da yok → `type: 'bill_cash'|'bill_card'` ile ödeme yöntemi encode edildi, migration gerekmedi
+- Telegram callback_data max 64 byte — Google URL callback'e sığmaz; env var ile okunuyor
+- `survey:`, `srvack:`, `srvdone:` callback'leri session lookup ÖNCE işleniyor (session deaktif/group chat fark etmiyor)
+
+### Nerede Kaldık
+Tüm buglar düzeltildi, garson Telegram akışı ve memnuniyet anketi eklendi. TS hataları yok.
+
+### Sıradaki Adım
+1. **Vercel env → `GOOGLE_REVIEWS_URL` = restoranın Google Maps yorum linki**
+2. **Supabase Dashboard → SQL Editor → 005-008 migration'larını uygula**
+3. Admin → Bölgeler → zone'ları oluştur, Telegram Chat ID'leri gir
+4. Test: garson talebi → Telegram'da "Gördüm" → "Tamamlandı" → web'de güncellendiğini doğrula
+5. Test: ödeme → müşteriye anket → 5 yıldız → Google link geliyor mu
+
+---
+
+## 2026-06-18 — Oturum 9: Zone Tam Entegrasyon + Telegram Bildirim Tamamlama + showTableOrders
+
+### Yapılanlar
+- **webhook/route.ts** — Tüm bildirimler zone routing'e bağlandı:
+  - `/start <token>` QR scan → zone'a "🙋 Masa X — Yeni müşteri geldi 👤 Ad"
+  - `handleConfirmOrder` → zone'a yeni sipariş bildirimi
+  - `updateOrderStatusAction 'preparing'` → zone'a "👨‍🍳 Hazırlanıyor" bildirimi
+  - `updateOrderStatusAction 'ready'` → zone'a "✅ Sipariş hazır" bildirimi
+  - `handleServiceRequest` → zone'a talep bildirimi + garson görmediyse "🔔 Tekrar" butonu (60s cooldown)
+  - `handlePaymentRequest` → zone'a kalemli adisyon + ödeme yöntemi ("POS getiriniz" kart için)
+  - `payBillAction` → zone'a "🧹 Temizlik yapılsın" bildirimi
+- **webhook/route.ts** — Çay ikramı akışı:
+  - `menu:payment` → artık doğrudan `showPaymentMenu` yerine `showTeaQuestion` çağırıyor
+  - `showTeaQuestion`: "☕ Çay ikramı ister misiniz?" (4 dilde) + Evet/Hayır butonları
+  - `ikram:yes` → `service_requests` tablosuna `type: 'ikram_cay'` insert, zone'a bildirim, `showPaymentMenu`
+  - `ikram:no` → doğrudan `showPaymentMenu`
+- **webhook/route.ts** — `showPaymentMenu` güncellendi: sipariş kalemleri (ürün adı × adet = tutar) + toplam gösteriyor
+- **webhook/route.ts** — `showTableOrders` yeni fonksiyon eklendi:
+  - Masa'nın tüm aktif (cancelled/delivered değil) siparişlerini sorgular
+  - Ürün bazında toplar (5x Adjaruli + 2x Lemonade şeklinde)
+  - Açık adisyon toplamını bills tablosundan çeker
+  - 4 dil desteği (tr/en/ka/ru)
+  - Geri + Sipariş Ekle + Hesap butonları
+- **Ana menü**: "📋 Masa Adisyonu" butonu eklendi → `menu:tableorders` callback → `showTableOrders`
+- **UnifiedDashboard**: Masa Haritası zone gruplandırması eklendi
+- **UnifiedDashboard**: `resendServiceRequestNotificationAction` import + 60s cooldown "🔔 Tekrar" butonu service request kartlarında
+- **resendServiceRequestNotificationAction** admin.ts'e eklendi: requestId → tablo → zone → `🔁 TEKRAR: Masa Talebi!`
+
+### Proje Durumu
+- [x] Migration 008_zones.sql — hazır
+- [x] Zone CRUD (admin.ts)
+- [x] ZoneManagement bileşeni (4 dil + oto çeviri)
+- [x] ManagementPanel Bölgeler sekmesi
+- [x] TableConfig masa formunda bölge seçici + zone gruplandırma görünümü
+- [x] Masa Haritası (UnifiedDashboard) zone gruplandırması
+- [x] TÜM bildirimler zone routing'e bağlandı (QR scan, sipariş, mutfak, ödeme, temizlik)
+- [x] Garson bildirimi "🔔 Tekrar" butonu (60s cooldown)
+- [x] Çay ikramı akışı (ikram_cay service_request tracking)
+- [x] Kalemli adisyon (showPaymentMenu + handlePaymentRequest)
+- [x] showTableOrders — 4 kişi aynı masada toplu sipariş görünümü
+- [ ] Supabase migrations 005-008 Dashboard'dan uygulanmalı
+
+### Kritik Kararlar / Notlar
+- `showTableOrders`: `orders.order_items.products` join + ürün bazında `itemMap` ile birleştirme — kişi bazında değil ürün bazında toplama tercih edildi (UX açısından daha temiz)
+- `ikram_cay` için migration yok — `service_requests.type` text alanı, mevcut schema destekler
+- `menu:showpay` yeni callback: çay sorusu bypass ederek doğrudan ödeme menüsüne gitmeyi daha sonra eklemek için (şu an kullanılmıyor)
+
+### Nerede Kaldık
+Webhook'taki TypeScript hatası (`showTableOrders` bulunamıyor) çözüldü. Tüm Telegram akışları (zone routing, çay ikramı, kalemli adisyon, toplu masa görünümü) kodlandı.
+
+### Sıradaki Adım
+1. **Supabase Dashboard → SQL Editor → 005-008 migration'larını uygula**
+2. Admin panel → Bölgeler → "Bahçe", "İç Salon" vs. ekle, Telegram Chat ID `-1004350117567` gir
+3. Masa Ayarları → Her masaya bölge ata
+4. Telegram test: müşteri QR → zone bildirim, sipariş → zone bildirim, ödeme → kalemli adisyon
+5. Çay ikramı test: ödeme butonuna bas → çay sorusu → "Evet" → service_requests'te `ikram_cay` kayıt
+
+---
+
+## 2026-06-18 — Oturum 8: Bölge (Zone) Sistemi — Garson Bildirim Yönlendirmesi
+
+### Yapılanlar
+- **Migration 008_zones.sql**: `zones` tablosu oluşturuldu (branch_id FK, name_tr/en/ka/ru, telegram_chat_id, is_active, sort_order) + `tables.zone_id` FK kolonu eklendi
+- **admin.ts Zone CRUD**: `fetchZonesAction`, `createZoneAction`, `updateZoneAction`, `deleteZoneAction` eklendi
+- **admin.ts Table actions güncellendi**: `createTableAction` ve `updateTableAction` artık `zone_id` parametresi kabul ediyor
+- **ZoneManagement.tsx**: Yeni bileşen — 4 dil (TR/EN/KA/RU) + `/api/translate` ile oto çeviri + Telegram Chat ID alanı + aktif/pasif toggle + sıra numarası
+- **ManagementPanel.tsx**: "Bölgeler" sekmesi eklendi (Layers ikonu → MapPin, ZoneManagement bileşeni render)
+- **TableConfig.tsx**: Masa ekleme/düzenleme formuna bölge dropdown'u eklendi; masa kartında bölge adı amber MapPin ile görünüyor; zones state ve `fetchZonesAction` ile paralel yükleme
+- **webhook/route.ts handleServiceRequest**: Garson bildirimi artık masa→zone→telegram_chat_id routing ile — masanın zone'una bak, zone'un telegram_chat_id'si varsa oraya gönder, yoksa global fallback
+
+### Proje Durumu
+- [x] Migration 008_zones.sql — hazır (Supabase'e manuel uygulanmalı)
+- [x] Zone CRUD (admin.ts)
+- [x] ZoneManagement bileşeni (4 dil + oto çeviri)
+- [x] ManagementPanel Bölgeler sekmesi
+- [x] TableConfig masa formunda bölge seçici
+- [x] Garson bildirimi zone routing (webhook)
+- [ ] Migration 005-008 Supabase Dashboard'dan uygulanmalı
+- [ ] Zone oluştur → masalara ata → test et
+
+### Kritik Kararlar / Notlar
+- Zone routing: `handleServiceRequest` → `tables.select('zone_id, zones(telegram_chat_id)')` → `sendTelegramNotification(msg, zoneChatId)` — `sendTelegramNotification` zaten `targetChatId?` parametresi destekliyordu
+- Bölgeler şubeye bağlı: `branch_id FK` ile her şubenin kendi bölgeleri var
+- Fallback: zone veya zone.telegram_chat_id yoksa bildirim env'deki global `TELEGRAM_CHAT_ID`'ye gider
+
+### Nerede Kaldık
+Zone sistemi kodlaması tamamlandı ve push edildi. Migration 008'in Supabase Dashboard'dan uygulanması bekleniyor.
+
+### Sıradaki Adım
+1. **Supabase Dashboard → SQL Editor → 005, 006, 007, 008 migration'larını sırayla uygula**
+2. Admin panel → Bölgeler → İç Salon, Bahçe, 1. Kat gibi bölgeler ekle + Telegram Chat ID'lerini gir
+3. Masa Ayarları → Her masaya bölge ata
+4. Test: müşteri masadan garson çağır → doğru bölgenin Telegram'ına gittiğini doğrula
+5. Devam edilecekler: kasiyerin zone görünümü, bölge bazlı sipariş filtreleme
+
+---
+
 ## 2026-06-18 — Oturum 7: UnifiedDashboard Birim Filtresi
 
 ### Yapılanlar

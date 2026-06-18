@@ -394,6 +394,69 @@ export async function POST(request: Request) {
       const dataStr = callbackQuery.data as string
       const callbackQueryId = callbackQuery.id
 
+      // Pre-session handlers — handle BEFORE session lookup
+      const srvAction = dataStr.split(':')[0]
+
+      // Satisfaction survey response (session is already deactivated at this point)
+      if (srvAction === 'survey') {
+        const survParts = dataStr.split(':')
+        const rating = parseInt(survParts[1] || '0')
+        const survLang = survParts[2] || 'tr'
+        await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
+        const googleUrl = process.env.GOOGLE_REVIEWS_URL || ''
+        let replyText: string
+        if (rating >= 4) {
+          replyText = survLang === 'en'
+            ? `${'⭐'.repeat(rating)} Thank you! We're so glad you enjoyed it. 🙏${googleUrl ? `\n\n⭐ A Google review would mean the world to us:\n${googleUrl}` : ''}`
+            : survLang === 'ru'
+            ? `${'⭐'.repeat(rating)} Спасибо! Рады, что всё понравилось. 🙏${googleUrl ? `\n\n⭐ Оставьте нам отзыв на Google — это очень важно для нас:\n${googleUrl}` : ''}`
+            : survLang === 'ka'
+            ? `${'⭐'.repeat(rating)} გმადლობთ! ძალიან გვიხარია. 🙏${googleUrl ? `\n\n⭐ Google-ზე შეფასება დაგვიტოვეთ:\n${googleUrl}` : ''}`
+            : `${'⭐'.repeat(rating)} Teşekkürler! Memnun olduğunuza sevindik. 🙏${googleUrl ? `\n\n⭐ Google'da yorum bırakırsanız çok mutlu oluruz:\n${googleUrl}` : ''}`
+        } else {
+          replyText = survLang === 'en' ? `${'⭐'.repeat(rating)} Thank you for your feedback. We'll keep improving! 🙏`
+            : survLang === 'ru' ? `${'⭐'.repeat(rating)} Спасибо за отзыв. Будем стараться стать лучше! 🙏`
+            : survLang === 'ka' ? `${'⭐'.repeat(rating)} გმადლობთ შეფასებისთვის. გავუმჯობესდებით! 🙏`
+            : `${'⭐'.repeat(rating)} Geri bildiriminiz için teşekkürler. Daha iyi olmak için çalışıyoruz! 🙏`
+        }
+        await sendTelegramApi(token, 'editMessageText', {
+          chat_id: chatId,
+          message_id: messageId,
+          text: replyText,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [] }
+        })
+        return NextResponse.json({ ok: true })
+      }
+
+      // Staff channel actions (no customer session in zone channels)
+      if (srvAction === 'srvack' || srvAction === 'srvdone') {
+        const requestId = dataStr.split(':').slice(1).join(':')
+        await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
+        if (srvAction === 'srvack') {
+          await supabase
+            .from('service_requests')
+            .update({ status: 'acknowledged', acknowledged_at: new Date().toISOString() })
+            .eq('id', requestId)
+          await sendTelegramApi(token, 'editMessageReplyMarkup', {
+            chat_id: chatId,
+            message_id: messageId,
+            reply_markup: { inline_keyboard: [[{ text: '✅ Tamamlandı', callback_data: `srvdone:${requestId}` }]] }
+          })
+        } else {
+          await supabase
+            .from('service_requests')
+            .update({ status: 'done', completed_at: new Date().toISOString() })
+            .eq('id', requestId)
+          await sendTelegramApi(token, 'editMessageReplyMarkup', {
+            chat_id: chatId,
+            message_id: messageId,
+            reply_markup: { inline_keyboard: [[{ text: '☑️ Tamamlandı', callback_data: 'noop' }]] }
+          })
+        }
+        return NextResponse.json({ ok: true })
+      }
+
       // Load session and branch metadata
       const deviceId = `tg_${chatId}`
       const { data: session } = await supabase
@@ -466,6 +529,8 @@ export async function POST(request: Request) {
           await showServiceMenu(token, chatId, lang, logoUrl, messageId)
         } else if (param === 'payment') {
           await showTeaQuestion(token, chatId, session.table_id, lang, logoUrl, supabase, messageId)
+        } else if (param === 'tableorders') {
+          await showTableOrders(token, chatId, session.table_id, lang, currency, logoUrl, supabase, messageId)
         }
       } 
       else if (action === 'cat') {
@@ -544,30 +609,57 @@ export async function POST(request: Request) {
       else if (action === 'ikram') {
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
         if (param === 'yes') {
-          // Çay ikramı service_request olarak kaydet
-          await supabase.from('service_requests').insert({
+          // Kaç çay sorusu
+          const qText = lang === 'en' ? '☕ How many teas would you like?'
+            : lang === 'ru' ? '☕ Сколько стаканов чая вы хотите?'
+            : lang === 'ka' ? '☕ რამდენი ჩაი გნებავთ?'
+            : '☕ Kaç kişilik çay istersiniz?'
+          await sendOrEditPhotoMessage(token, chatId, logoUrl, qText, {
+            inline_keyboard: [
+              [
+                { text: '1', callback_data: 'ikram:count:1' },
+                { text: '2', callback_data: 'ikram:count:2' },
+                { text: '3', callback_data: 'ikram:count:3' },
+                { text: '4', callback_data: 'ikram:count:4' },
+                { text: '5', callback_data: 'ikram:count:5' },
+              ],
+              [{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]
+            ]
+          }, messageId)
+        } else if (param.startsWith('count:')) {
+          const count = Math.max(1, Math.min(5, parseInt(param.replace('count:', '')) || 1))
+          // N adet ikram_cay kaydı ekle
+          const rows = Array.from({ length: count }, () => ({
             table_id: session.table_id,
             branch_id: session.branch_id,
             session_id: session.id,
             type: 'ikram_cay',
             priority: 'blue',
             status: 'pending',
-          })
-          // Zone grubuna bildir
+          }))
+          const { data: inserted } = await supabase.from('service_requests').insert(rows).select('id').limit(1)
+          // Zone bildirimi
           const { data: tRow } = await supabase
             .from('tables')
             .select('name, zone_id, zones(telegram_chat_id)')
             .eq('id', session.table_id)
             .maybeSingle()
           const zChat = (tRow?.zones as any)?.telegram_chat_id
-          const { sendTelegramNotification } = await import('@/lib/telegram')
-          sendTelegramNotification(
-            `☕ <b>${escapeHtml(tRow?.name || 'Masa')}</b> — Çay ikramı istedi`,
+          const { sendTelegramMessageWithButtons } = await import('@/lib/telegram')
+          const requestId = inserted?.[0]?.id
+          sendTelegramMessageWithButtons(
+            `☕ <b>${escapeHtml(tRow?.name || 'Masa')}</b> — ${count} adet çay ikramı istedi`,
+            requestId
+              ? { inline_keyboard: [[
+                  { text: '👀 Gördüm', callback_data: `srvack:${requestId}` },
+                  { text: '✅ Getirildi', callback_data: `srvdone:${requestId}` }
+                ]] }
+              : { inline_keyboard: [] },
             zChat
           ).catch(() => {})
-          // Teşekkür mesajı göster sonra ödeme menüsüne geç
+          // Teşekkür mesajı + ödeme
           await sendOrEditPhotoMessage(token, chatId, logoUrl, getT(lang, 'teaAdded'), {
-            inline_keyboard: [[{ text: '💳 Hesabı Öde', callback_data: 'menu:showpay' }]]
+            inline_keyboard: [[{ text: '💳 ' + (lang === 'en' ? 'Pay Bill' : lang === 'ru' ? 'Оплатить' : lang === 'ka' ? 'გადახდა' : 'Hesabı Öde'), callback_data: 'menu:showpay' }]]
           }, messageId)
         } else {
           // Hayır → direkt ödeme menüsü
@@ -785,6 +877,9 @@ async function showMainMenu(
       [
         { text: getT(lang, 'btnService'), callback_data: 'menu:service' },
         { text: getT(lang, 'btnBill'), callback_data: 'menu:payment' }
+      ],
+      [
+        { text: lang === 'en' ? '📋 Table Orders' : lang === 'ru' ? '📋 Заказы стола' : lang === 'ka' ? '📋 მაგიდის შეკვეთები' : '📋 Masa Adisyonu', callback_data: 'menu:tableorders' }
       ]
     ]
   }
@@ -1405,13 +1500,90 @@ async function handleServiceRequest(
 ━━━━━━━━━━━━━━━━━
 🔔 <b>Talep:</b> ${reqInfo.icon} <b>${escapeHtml(reqInfo.label)}</b>`
 
-  const { sendTelegramNotification } = await import('@/lib/telegram')
-  await sendTelegramNotification(alertMessage, zoneChatId)
+  const { sendTelegramMessageWithButtons } = await import('@/lib/telegram')
+  await sendTelegramMessageWithButtons(
+    alertMessage,
+    data?.id
+      ? { inline_keyboard: [[
+          { text: '👀 Gördüm', callback_data: `srvack:${data.id}` },
+          { text: '✅ Tamamlandı', callback_data: `srvdone:${data.id}` }
+        ]] }
+      : { inline_keyboard: [] },
+    zoneChatId
+  )
 
   const successText = getT(lang, 'serviceRequestSent', { type: reqInfo.label })
 
   await sendOrEditPhotoMessage(token, chatId, logoUrl, successText, {
     inline_keyboard: [[{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]]
+  }, messageId)
+}
+
+async function showTableOrders(
+  token: string,
+  chatId: number,
+  tableId: string,
+  lang: string,
+  currency: string,
+  logoUrl: string,
+  supabase: any,
+  messageId: number
+) {
+  const { data: orders } = await supabase
+    .from('orders')
+    .select('id, status, total_amount, table_sessions(customer_name), order_items(quantity, unit_price, products(name_tr, name_en, name_ru, name_ka))')
+    .eq('table_id', tableId)
+    .neq('status', 'cancelled')
+    .neq('status', 'delivered')
+    .order('created_at', { ascending: true })
+
+  if (!orders || orders.length === 0) {
+    await sendOrEditPhotoMessage(token, chatId, logoUrl,
+      lang === 'en' ? '📋 No active orders at this table yet.'
+      : lang === 'ru' ? '📋 На этом столе пока нет активных заказов.'
+      : lang === 'ka' ? '📋 ამ მაგიდაზე ჯერ შეკვეთები არ არის.'
+      : '📋 Masada henüz aktif sipariş yok.',
+      { inline_keyboard: [[{ text: lang === 'en' ? '🍽 Order' : lang === 'ru' ? '🍽 Заказать' : lang === 'ka' ? '🍽 შეკვეთა' : '🍽 Sipariş Ver', callback_data: 'menu:cats' }, { text: '🔙', callback_data: 'menu:main' }]] },
+      messageId
+    )
+    return
+  }
+
+  // Tüm kalemleri birleştir (ürün bazında topla)
+  const itemMap: Record<string, { name: string; qty: number; unit: number }> = {}
+  orders.forEach((o: any) => {
+    o.order_items?.forEach((item: any) => {
+      const name = item.products?.[`name_${lang}`] || item.products?.name_tr || 'Ürün'
+      const key = name
+      if (!itemMap[key]) itemMap[key] = { name, qty: 0, unit: Number(item.unit_price) }
+      itemMap[key].qty += Number(item.quantity)
+    })
+  })
+
+  let itemsHtml = ''
+  Object.values(itemMap).forEach(item => {
+    itemsHtml += `• ${item.qty}x <b>${escapeHtml(item.name)}</b> — ${(item.qty * item.unit).toFixed(2)} ${currency}\n`
+  })
+
+  const { data: bill } = await supabase
+    .from('bills')
+    .select('total_amount')
+    .eq('table_id', tableId)
+    .eq('status', 'open')
+    .maybeSingle()
+
+  const totalStr = bill ? `${Number(bill.total_amount).toFixed(2)} ${currency}` : '—'
+  const title = lang === 'en' ? '📋 <b>Table Orders</b>' : lang === 'ru' ? '📋 <b>Заказы стола</b>' : lang === 'ka' ? '📋 <b>მაგიდის შეკვეთები</b>' : '📋 <b>Masa Adisyonu</b>'
+  const text = `${title}\n━━━━━━━━━━━━━━━━━\n${itemsHtml}━━━━━━━━━━━━━━━━━\n💰 <b>${lang === 'en' ? 'Total' : lang === 'ru' ? 'Итого' : lang === 'ka' ? 'ჯამი' : 'Toplam'}: ${totalStr}</b>`
+
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, text, {
+    inline_keyboard: [
+      [
+        { text: lang === 'en' ? '🍽 Add Order' : lang === 'ru' ? '🍽 Добавить' : lang === 'ka' ? '🍽 დამატება' : '🍽 Sipariş Ekle', callback_data: 'menu:cats' },
+        { text: lang === 'en' ? '💳 Pay' : lang === 'ru' ? '💳 Оплатить' : lang === 'ka' ? '💳 გადახდა' : '💳 Hesap', callback_data: 'menu:payment' },
+      ],
+      [{ text: '🔙', callback_data: 'menu:main' }]
+    ]
   }, messageId)
 }
 
@@ -1534,22 +1706,32 @@ async function handlePaymentRequest(
 
   if (!bill) return
 
-  const note = `Ödeme Yöntemi: ${method === 'cash' ? 'Nakit' : 'Kredi Kartı'}`
-  const { error } = await supabase
+  const billType = method === 'cash' ? 'bill_cash' : 'bill_card'
+  const { data: srInserted, error } = await supabase
     .from('service_requests')
     .insert({
       table_id: session.table_id,
       branch_id: session.branch_id,
       session_id: session.id,
-      type: 'bill',
+      type: billType,
       priority: 'red',
       status: 'pending',
-      assigned_to: null,
-      notes: note
     })
+    .select('id')
+    .single()
 
   if (error) {
     console.error('Error inserting payment service request:', error)
+    const errText = lang === 'en' ? '⚠️ Something went wrong. Please try again or call a waiter.'
+      : lang === 'ru' ? '⚠️ Произошла ошибка. Попробуйте снова или позовите официанта.'
+      : lang === 'ka' ? '⚠️ შეცდომა მოხდა. სცადეთ კიდევ ან გამოიძახეთ ოფიციანტი.'
+      : '⚠️ Bir hata oluştu. Lütfen tekrar deneyin veya garson çağırın.'
+    await sendOrEditPhotoMessage(token, chatId, logoUrl, errText, {
+      inline_keyboard: [
+        [{ text: '🔄 Tekrar Dene', callback_data: `pay:${method}` }],
+        [{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]
+      ]
+    }, messageId)
     return
   }
 
@@ -1591,8 +1773,17 @@ ${itemsHtml}━━━━━━━━━━━━━━━━━
     .maybeSingle()
   const payZoneChatId = (tableRow?.zones as any)?.telegram_chat_id as string | undefined
 
-  const { sendTelegramNotification } = await import('@/lib/telegram')
-  await sendTelegramNotification(alertMessage, payZoneChatId)
+  const { sendTelegramMessageWithButtons } = await import('@/lib/telegram')
+  await sendTelegramMessageWithButtons(
+    alertMessage,
+    srInserted?.id
+      ? { inline_keyboard: [[
+          { text: '👀 Gördüm', callback_data: `srvack:${srInserted.id}` },
+          { text: '✅ Ödeme Alındı', callback_data: `srvdone:${srInserted.id}` }
+        ]] }
+      : { inline_keyboard: [] },
+    payZoneChatId
+  )
 
   const successText = getT(lang, 'paymentRequestSent')
 

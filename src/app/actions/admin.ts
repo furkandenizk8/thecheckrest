@@ -571,6 +571,13 @@ export async function payBillAction(billId: string, amount: number, method: 'cas
 
   // If fully paid, automatically reset the table and deactivate sessions
   if (isFullyPaid) {
+    // Get Telegram customers BEFORE deactivating sessions so we can send survey
+    const { data: activeSessions } = await supabase
+      .from('table_sessions')
+      .select('device_id, language')
+      .eq('table_id', bill.table_id)
+      .eq('is_active', true)
+
     await supabase
       .from('table_sessions')
       .update({ is_active: false })
@@ -581,7 +588,15 @@ export async function payBillAction(billId: string, amount: number, method: 'cas
       .update({ status: 'empty' })
       .eq('id', bill.table_id)
 
-    // Complete requests
+    // Mark all active orders as delivered so kitchen screen clears
+    await supabase
+      .from('orders')
+      .update({ status: 'delivered', updated_at: new Date().toISOString() })
+      .eq('table_id', bill.table_id)
+      .neq('status', 'cancelled')
+      .neq('status', 'delivered')
+
+    // Complete all pending service requests
     await supabase
       .from('service_requests')
       .update({
@@ -604,6 +619,36 @@ export async function payBillAction(billId: string, amount: number, method: 'cas
       `🧹 <b>${tableName}</b> kapatıldı — Temizlik yapılsın`,
       zoneChatId
     ).catch(console.error)
+
+    // Memnuniyet anketi — Telegram müşterilerine gönder
+    // Google Reviews URL'si GOOGLE_REVIEWS_URL env var'dan okunur (webhook tarafında da)
+    if (activeSessions) {
+      const { sendTelegramMessageWithButtons } = await import('@/lib/telegram')
+      for (const sess of activeSessions) {
+        if (sess.device_id?.startsWith('tg_')) {
+          const custChatId = (sess.device_id as string).replace('tg_', '')
+          const lang = sess.language || 'tr'
+          const surveyText = lang === 'en'
+            ? '⭐ <b>How was your experience?</b>\nThank you for visiting! We\'d love your feedback.'
+            : lang === 'ru' ? '⭐ <b>Как вам понравилось?</b>\nСпасибо за визит! Нам важна ваша оценка.'
+            : lang === 'ka' ? '⭐ <b>როგორი იყო თქვენი გამოcდilება?</b>\nგმადლობთ ვიზიტისთვის!'
+            : '⭐ <b>Deneyiminizi değerlendirin</b>\nZiyaretiniz için teşekkürler! Görüşünüz bizim için önemlidir.'
+          sendTelegramMessageWithButtons(
+            surveyText,
+            {
+              inline_keyboard: [[
+                { text: '1 ⭐', callback_data: `survey:1:${lang}` },
+                { text: '2 ⭐', callback_data: `survey:2:${lang}` },
+                { text: '3 ⭐', callback_data: `survey:3:${lang}` },
+                { text: '4 ⭐', callback_data: `survey:4:${lang}` },
+                { text: '5 ⭐', callback_data: `survey:5:${lang}` },
+              ]]
+            },
+            custChatId
+          ).catch(() => {})
+        }
+      }
+    }
   }
 
   return { success: true, isFullyPaid }

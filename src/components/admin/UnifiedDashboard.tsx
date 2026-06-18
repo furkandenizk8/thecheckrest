@@ -775,13 +775,16 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
                         const isAcknowledged = req.status === 'acknowledged'
 
                         let label = req.type, icon = '🔔'
-                        if (req.type === 'waiter')   { label = 'Garson Çağır';     icon = '🙋‍♂️' }
-                        else if (req.type === 'bill')    { label = 'Hesap İste';      icon = '🧾' }
-                        else if (req.type === 'napkin')  { label = 'Peçete İste';     icon = '🧻' }
-                        else if (req.type === 'water')   { label = 'Su İste';         icon = '💧' }
-                        else if (req.type === 'salt')    { label = 'Tuz/Karabiber';   icon = '🧂' }
-                        else if (req.type === 'cutlery') { label = 'Çatal / Bıçak';  icon = '🍴' }
-                        else if (req.type === 'cleaning'){ label = 'Temizlik Talebi'; icon = '🧹' }
+                        if (req.type === 'waiter')        { label = 'Garson Çağır';       icon = '🙋‍♂️' }
+                        else if (req.type === 'bill')     { label = 'Hesap İste';          icon = '🧾' }
+                        else if (req.type === 'bill_cash'){ label = 'Hesap — 💵 Nakit';   icon = '🧾' }
+                        else if (req.type === 'bill_card'){ label = 'Hesap — 💳 Kart / POS'; icon = '🧾' }
+                        else if (req.type === 'napkin')   { label = 'Peçete İste';         icon = '🧻' }
+                        else if (req.type === 'water')    { label = 'Su İste';             icon = '💧' }
+                        else if (req.type === 'salt')     { label = 'Tuz/Karabiber';       icon = '🧂' }
+                        else if (req.type === 'cutlery')  { label = 'Çatal / Bıçak';       icon = '🍴' }
+                        else if (req.type === 'cleaning') { label = 'Temizlik Talebi';     icon = '🧹' }
+                        else if (req.type === 'ikram_cay'){ label = 'Çay İkramı';          icon = '☕' }
 
                         return (
                           <div
