@@ -1651,12 +1651,13 @@ async function showPaymentMenu(
     return
   }
 
-  // Adisyon kalemleri
+  // Adisyon kalemleri — sadece aktif siparişler (delivered olanlar önceki oturuma ait)
   const { data: orders } = await supabase
     .from('orders')
     .select('order_items(quantity, products(name_tr, name_en, base_price))')
     .eq('table_id', tableId)
     .neq('status', 'cancelled')
+    .neq('status', 'delivered')
 
   let itemsText = ''
   if (orders) {
@@ -1735,12 +1736,13 @@ async function handlePaymentRequest(
     return
   }
 
-  // Adisyon kalemleri
+  // Adisyon kalemleri — sadece aktif siparişler
   const { data: orders } = await supabase
     .from('orders')
     .select('order_items(quantity, products(name_tr, base_price))')
     .eq('table_id', session.table_id)
     .neq('status', 'cancelled')
+    .neq('status', 'delivered')
 
   let itemsHtml = ''
   if (orders) {
