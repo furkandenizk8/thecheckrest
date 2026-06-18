@@ -354,9 +354,36 @@ export default function TableConfig({ embedded }: { embedded?: boolean }) {
             <p className="text-xs font-bold">Henüz masa yok</p>
             <p className="text-[10px] mt-1">Masa Ekle butonuna tıkla</p>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {tables.map(table => (
+        ) : (() => {
+          // Bölgeye göre gruplandır — sırası: tanımlı bölgeler (sort_order), sonra bölgesizler
+          const grouped: { zone: any | null; tables: Table[] }[] = []
+          const sortedZones = [...zones].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+          sortedZones.forEach(z => {
+            const zoneTables = tables.filter(t => t.zone_id === z.id)
+            if (zoneTables.length > 0) grouped.push({ zone: z, tables: zoneTables })
+          })
+          const unzoned = tables.filter(t => !t.zone_id)
+          if (unzoned.length > 0) grouped.push({ zone: null, tables: unzoned })
+          // Bölge yoksa düz grid
+          if (zones.length === 0) grouped.splice(0, grouped.length, { zone: null, tables })
+
+          return (
+            <div className="space-y-8">
+              {grouped.map(group => (
+                <div key={group.zone?.id ?? '__unzoned__'}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <MapPin className="w-3.5 h-3.5 text-amber-500/70" />
+                    <span className="text-xs font-bold text-zinc-300">
+                      {group.zone ? group.zone.name_tr : 'Bölge Atanmamış'}
+                    </span>
+                    <span className="text-[10px] text-zinc-600 font-medium">{group.tables.length} masa</span>
+                    {group.zone?.telegram_chat_id && (
+                      <span className="text-[10px] text-sky-500/70">📨 Telegram</span>
+                    )}
+                    <div className="flex-1 h-px bg-zinc-800" />
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    {group.tables.map(table => (
               <div
                 key={table.id}
                 className={`bg-zinc-900/40 border border-zinc-800 rounded-2xl p-4 space-y-3 group transition hover:border-zinc-700 ${!table.is_active ? 'opacity-50' : ''}`}
@@ -367,14 +394,6 @@ export default function TableConfig({ embedded }: { embedded?: boolean }) {
                     <div className="flex items-center gap-1 mt-0.5 text-[9px] text-zinc-500">
                       <Users className="w-2.5 h-2.5" /> {table.capacity} kişi
                     </div>
-                    {table.zone_id && (() => {
-                      const zone = zones.find(z => z.id === table.zone_id)
-                      return zone ? (
-                        <div className="flex items-center gap-1 mt-0.5 text-[9px] text-amber-500/70">
-                          <MapPin className="w-2.5 h-2.5" /> {zone.name_tr}
-                        </div>
-                      ) : null
-                    })()}
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
                     <button
@@ -429,9 +448,13 @@ export default function TableConfig({ embedded }: { embedded?: boolean }) {
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
       </main>
 
       {tableModal.open && (
