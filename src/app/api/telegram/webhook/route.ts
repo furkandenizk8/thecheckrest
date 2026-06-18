@@ -1090,8 +1090,20 @@ async function handleConfirmOrder(
 ${kitchenItemsHtml}━━━━━━━━━━━━━━━━━
 💰 Toplam: <b>${finalTotal.toFixed(2)} ${currency}</b>`
 
+  // Zone routing: masanın bölgesine göre Telegram yönlendirmesi
+  let orderZoneChatId: string | undefined
+  if (session.table_id) {
+    const { data: tableRow } = await supabaseClient()
+      .from('tables')
+      .select('zone_id, zones(telegram_chat_id)')
+      .eq('id', session.table_id)
+      .maybeSingle()
+    const zoneChat = (tableRow?.zones as any)?.telegram_chat_id
+    if (zoneChat) orderZoneChatId = zoneChat
+  }
+
   const { sendTelegramNotification } = await import('@/lib/telegram')
-  await sendTelegramNotification(alertMessage)
+  await sendTelegramNotification(alertMessage, orderZoneChatId)
 
   // Müşteri onay mesajı — samimi ve detaylı
   let custItemsHtml = ''
@@ -1426,16 +1438,28 @@ async function handlePaymentRequest(
   const tableName = session.tables?.name || 'Masa'
   const customerName = session.customer_name || 'Müşteri'
 
-  const alertMessage = `💵 <b>HESAP ÖDEME TALEBİ (Telegram Chat)!</b>
+  const alertMessage = `💵 <b>HESAP ÖDEME TALEBİ!</b>
 ━━━━━━━━━━━━━━━━━
 🏢 <b>Şube:</b> ${escapeHtml(branchName)}
 🎯 <b>Masa:</b> ${escapeHtml(tableName)}
-👤 <b>Müşteri:</b> ${escapeHtml(customerName)} (Telegram Chat)
+👤 <b>Müşteri:</b> ${escapeHtml(customerName)}
 💳 <b>Ödeme:</b> ${method === 'cash' ? '💵 Nakit' : '💳 Kredi Kartı'}
 💰 <b>Toplam Tutar:</b> <b>${Number(bill.total_amount).toFixed(2)} ${currency}</b>`
 
+  // Zone routing
+  let payZoneChatId: string | undefined
+  if (session.table_id) {
+    const { data: tableRow } = await supabaseClient()
+      .from('tables')
+      .select('zone_id, zones(telegram_chat_id)')
+      .eq('id', session.table_id)
+      .maybeSingle()
+    const zoneChat = (tableRow?.zones as any)?.telegram_chat_id
+    if (zoneChat) payZoneChatId = zoneChat
+  }
+
   const { sendTelegramNotification } = await import('@/lib/telegram')
-  await sendTelegramNotification(alertMessage)
+  await sendTelegramNotification(alertMessage, payZoneChatId)
 
   const successText = getT(lang, 'paymentRequestSent')
 
