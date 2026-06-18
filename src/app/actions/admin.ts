@@ -301,14 +301,23 @@ export async function updateOrderStatusAction(orderId: string, status: string) {
   if (status === 'preparing') {
     await supabase.from('order_items').update({ status: 'preparing' }).eq('order_id', orderId).eq('status', 'pending')
 
-    // Müşteriye Telegram bildirimi — hazırlanıyor
-    const { data: orderSess } = await supabase
+    const { data: orderPrep } = await supabase
       .from('orders')
-      .select('session_id, table_sessions(device_id, language)')
+      .select('table_id, session_id, tables(name, zone_id, zones(telegram_chat_id)), table_sessions(device_id, language)')
       .eq('id', orderId)
       .single()
-    if (orderSess?.session_id) {
-      const sess = orderSess.table_sessions as any
+
+    if (orderPrep) {
+      // Zone bildirimi — hazırlıyorum
+      const zoneChatId = (orderPrep.tables as any)?.zones?.telegram_chat_id as string | undefined
+      const tableName = (orderPrep.tables as any)?.name || 'Masa'
+      sendTelegramNotification(
+        `👨‍🍳 <b>${tableName}</b> — Sipariş hazırlanıyor`,
+        zoneChatId
+      ).catch(console.error)
+
+      // Müşteriye Telegram bildirimi — hazırlanıyor
+      const sess = orderPrep.table_sessions as any
       const deviceId: string = sess?.device_id || ''
       if (deviceId.startsWith('tg_')) {
         const custChatId = deviceId.replace('tg_', '')
@@ -325,11 +334,12 @@ export async function updateOrderStatusAction(orderId: string, status: string) {
 
     const { data: order } = await supabase
       .from('orders')
-      .select('tables(name), branches(name), table_sessions(customer_name, device_id, language)')
+      .select('tables(name, zone_id, zones(telegram_chat_id)), branches(name), table_sessions(customer_name, device_id, language)')
       .eq('id', orderId)
       .single()
 
     if (order) {
+      const zoneChatId = (order.tables as any)?.zones?.telegram_chat_id as string | undefined
       const msg =
 `🍽 <b>SİPARİŞ HAZIR — MASAYA GÖTÜR!</b>
 ━━━━━━━━━━━━━━━━━
@@ -338,7 +348,7 @@ export async function updateOrderStatusAction(orderId: string, status: string) {
 👤 <b>Müşteri:</b> ${(order.table_sessions as any)?.customer_name || 'Müşteri'}
 ━━━━━━━━━━━━━━━━━
 ✅ Mutfak siparişi hazırladı. Lütfen teslim edin.`
-      sendTelegramNotification(msg).catch(console.error)
+      sendTelegramNotification(msg, zoneChatId).catch(console.error)
 
       // Müşteriye Telegram bildirimi — hazır
       const deviceId: string = (order.table_sessions as any)?.device_id || ''
@@ -393,14 +403,15 @@ export async function updateOrderItemStatusAction(itemId: string, status: string
           .eq('id', item.order_id)
           .neq('status', 'delivered')
 
-        // Garsona bildirim — ana TELEGRAM_CHAT_ID'ye
+        // Garsona bildirim — zone routing ile
         const { data: order } = await supabase
           .from('orders')
-          .select('tables(name), branches(name), table_sessions(customer_name)')
+          .select('tables(name, zone_id, zones(telegram_chat_id)), branches(name), table_sessions(customer_name, device_id, language)')
           .eq('id', item.order_id)
           .single()
 
         if (order) {
+          const zoneChatId = (order.tables as any)?.zones?.telegram_chat_id as string | undefined
           const msg =
 `🍽 <b>SİPARİŞ HAZIR — MASAYA GÖTÜR!</b>
 ━━━━━━━━━━━━━━━━━
@@ -409,7 +420,7 @@ export async function updateOrderItemStatusAction(itemId: string, status: string
 👤 <b>Müşteri:</b> ${(order.table_sessions as any)?.customer_name || 'Müşteri'}
 ━━━━━━━━━━━━━━━━━
 ✅ Tüm birimler hazırladı. Lütfen teslim edin.`
-          sendTelegramNotification(msg).catch(console.error)
+          sendTelegramNotification(msg, zoneChatId).catch(console.error)
 
           // Müşteriye Telegram bildirimi — hazır
           const deviceId: string = (order.table_sessions as any)?.device_id || ''
@@ -573,12 +584,26 @@ export async function payBillAction(billId: string, amount: number, method: 'cas
     // Complete requests
     await supabase
       .from('service_requests')
-      .update({ 
+      .update({
         status: 'done',
         completed_at: new Date().toISOString()
       })
       .eq('table_id', bill.table_id)
       .neq('status', 'done')
+
+    // Zone bildirimi — temizlik
+    const { data: tableRow } = await supabase
+      .from('tables')
+      .select('name, zone_id, zones(telegram_chat_id)')
+      .eq('id', bill.table_id)
+      .single()
+
+    const zoneChatId = (tableRow?.zones as any)?.telegram_chat_id as string | undefined
+    const tableName = tableRow?.name || 'Masa'
+    sendTelegramNotification(
+      `🧹 <b>${tableName}</b> kapatıldı — Temizlik yapılsın`,
+      zoneChatId
+    ).catch(console.error)
   }
 
   return { success: true, isFullyPaid }
