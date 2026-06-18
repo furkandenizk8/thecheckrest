@@ -39,10 +39,14 @@ const botTranslations: Record<string, Record<string, string>> = {
     srv_water: '💧 Su',
     srv_cleaning: '🧹 Temizlik',
     serviceRequestSent: '✅ Talebiniz ({type}) personele iletildi.',
+    teaQuestion: '☕ <b>Çay İkramı</b>\n━━━━━━━━━━━━━━━━━\nHesabınızı kapatmadan önce — ikramımız olarak çay ister misiniz?',
+    teaYes: '☕ Evet, çay alırım',
+    teaNo: '🙅 Hayır, teşekkürler',
+    teaAdded: '☕ Çayınız hazırlanıyor, teşekkür ederiz!',
     paymentTitle: '🧾 <b>Adisyon Ödeme ({tableName})</b>\n━━━━━━━━━━━━━━━━━\nToplam Tutar: <b>{total} GEL</b>\n\nLütfen masada kullanmak istediğiniz ödeme yöntemini seçin:',
     pay_cash: '💵 Nakit',
     pay_card: '💳 Kredi Kartı',
-    paymentRequestSent: '✅ Ödeme talebiniz iletildi. Garsonumuz hesap süetiniz ile masanıza geliyor.',
+    paymentRequestSent: '✅ Ödeme talebiniz iletildi. Garsonumuz hesap süetiyle masanıza geliyor.',
     noActiveBill: 'Masaya ait henüz aktif adisyon bulunmuyor. Önce sipariş vermelisiniz.',
     invalidSession: '⚠️ Oturumunuz geçersiz. Lütfen masadaki QR kodu tekrar okutun.',
     btnNutrition: 'ℹ️ Detay & Kalori',
@@ -92,10 +96,14 @@ const botTranslations: Record<string, Record<string, string>> = {
     srv_water: '💧 Water',
     srv_cleaning: '🧹 Cleaning',
     serviceRequestSent: '✅ Your request ({type}) has been sent to staff.',
+    teaQuestion: '☕ <b>Complimentary Tea</b>\n━━━━━━━━━━━━━━━━━\nBefore closing your bill — would you like a complimentary tea on us?',
+    teaYes: '☕ Yes, please',
+    teaNo: '🙅 No, thank you',
+    teaAdded: '☕ Your tea is being prepared, thank you!',
     paymentTitle: '🧾 <b>Payment Request ({tableName})</b>\n━━━━━━━━━━━━━━━━━\nTotal: <b>{total} GEL</b>\n\nPlease select payment method:',
     pay_cash: '💵 Cash',
     pay_card: '💳 Credit Card',
-    paymentRequestSent: '✅ Payment request sent. Staff will attend to you shortly.',
+    paymentRequestSent: '✅ Payment request sent. Staff will bring your bill shortly.',
     noActiveBill: 'No active bill found for this table. Place an order first.',
     invalidSession: '⚠️ Session expired or invalid. Please scan the QR code again.',
     btnNutrition: 'ℹ️ Details & Macros',
@@ -145,6 +153,10 @@ const botTranslations: Record<string, Record<string, string>> = {
     srv_water: '💧 Вода',
     srv_cleaning: '🧹 Уборка',
     serviceRequestSent: '✅ Ваш запрос ({type}) отправлен персоналу.',
+    teaQuestion: '☕ <b>Угощение чаем</b>\n━━━━━━━━━━━━━━━━━\nПеред закрытием счёта — хотите чай в подарок от нас?',
+    teaYes: '☕ Да, пожалуйста',
+    teaNo: '🙅 Нет, спасибо',
+    teaAdded: '☕ Ваш чай готовится, спасибо!',
     paymentTitle: '🧾 <b>Запрос оплаты ({tableName})</b>\n━━━━━━━━━━━━━━━━━\nИтого: <b>{total} GEL</b>\n\nВыберите способ оплаты:',
     pay_cash: '💵 Наличные',
     pay_card: '💳 Карта',
@@ -198,6 +210,10 @@ const botTranslations: Record<string, Record<string, string>> = {
     srv_water: '💧 წყალი',
     srv_cleaning: '🧹 დასუფთავება',
     serviceRequestSent: '✅ თქვენი მოთხოვნა ({type}) გაგზავნილია.',
+    teaQuestion: '☕ <b>ჩაის საჩუქარი</b>\n━━━━━━━━━━━━━━━━━\nანგარიშის დახურვამდე — გსურთ ჩაი ჩვენი საჩუქრად?',
+    teaYes: '☕ დიახ, გთხოვთ',
+    teaNo: '🙅 არა, გმადლობთ',
+    teaAdded: '☕ თქვენი ჩაი მზადდება, გმადლობთ!',
     paymentTitle: '🧾 <b>გადახდის მოთხოვნა ({tableName})</b>\n━━━━━━━━━━━━━━━━━\nჯამი: <b>{total} GEL</b>\n\nგთხოვთ აირჩიოთ გადახდის მეთოდი:',
     pay_cash: '💵 ნაღდი ანგარიშსწორება',
     pay_card: '💳 ბარათით',
@@ -449,7 +465,7 @@ export async function POST(request: Request) {
         } else if (param === 'service') {
           await showServiceMenu(token, chatId, lang, logoUrl, messageId)
         } else if (param === 'payment') {
-          await showPaymentMenu(token, chatId, tableName, branchId, lang, session.table_id, serviceFeePercent, currency, logoUrl, supabase, messageId)
+          await showTeaQuestion(token, chatId, session.table_id, lang, logoUrl, supabase, messageId)
         }
       } 
       else if (action === 'cat') {
@@ -525,6 +541,43 @@ export async function POST(request: Request) {
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
         await handleServiceRequest(token, chatId, session, type, lang, logoUrl, messageId)
       } 
+      else if (action === 'ikram') {
+        await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
+        if (param === 'yes') {
+          // Çay ikramı service_request olarak kaydet
+          await supabase.from('service_requests').insert({
+            table_id: session.table_id,
+            branch_id: session.branch_id,
+            session_id: session.id,
+            type: 'ikram_cay',
+            priority: 'blue',
+            status: 'pending',
+          })
+          // Zone grubuna bildir
+          const { data: tRow } = await supabase
+            .from('tables')
+            .select('name, zone_id, zones(telegram_chat_id)')
+            .eq('id', session.table_id)
+            .maybeSingle()
+          const zChat = (tRow?.zones as any)?.telegram_chat_id
+          const { sendTelegramNotification } = await import('@/lib/telegram')
+          sendTelegramNotification(
+            `☕ <b>${escapeHtml(tRow?.name || 'Masa')}</b> — Çay ikramı istedi`,
+            zChat
+          ).catch(() => {})
+          // Teşekkür mesajı göster sonra ödeme menüsüne geç
+          await sendOrEditPhotoMessage(token, chatId, logoUrl, getT(lang, 'teaAdded'), {
+            inline_keyboard: [[{ text: '💳 Hesabı Öde', callback_data: 'menu:showpay' }]]
+          }, messageId)
+        } else {
+          // Hayır → direkt ödeme menüsü
+          await showPaymentMenu(token, chatId, tableName, branchId, lang, session.table_id, serviceFeePercent, currency, logoUrl, supabase, messageId)
+        }
+      }
+      else if (action === 'menu' && param === 'showpay') {
+        await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
+        await showPaymentMenu(token, chatId, tableName, branchId, lang, session.table_id, serviceFeePercent, currency, logoUrl, supabase, messageId)
+      }
       else if (action === 'pay') {
         const method = param
         await sendTelegramApi(token, 'answerCallbackQuery', { callback_query_id: callbackQueryId })
@@ -1362,6 +1415,42 @@ async function handleServiceRequest(
   }, messageId)
 }
 
+async function showTeaQuestion(
+  token: string,
+  chatId: number,
+  tableId: string,
+  lang: string,
+  logoUrl: string,
+  supabase: any,
+  messageId: number
+) {
+  // Açık adisyon var mı kontrol et — yoksa direkt ödeme menüsüne
+  const { data: bill } = await supabase
+    .from('bills')
+    .select('id')
+    .eq('table_id', tableId)
+    .eq('status', 'open')
+    .maybeSingle()
+
+  if (!bill) {
+    const text = getT(lang, 'noActiveBill')
+    await sendOrEditPhotoMessage(token, chatId, logoUrl, text, {
+      inline_keyboard: [[{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]]
+    }, messageId)
+    return
+  }
+
+  const text = getT(lang, 'teaQuestion')
+  const inlineKeyboard = [
+    [
+      { text: getT(lang, 'teaYes'), callback_data: 'ikram:yes' },
+      { text: getT(lang, 'teaNo'),  callback_data: 'ikram:no' }
+    ],
+    [{ text: getT(lang, 'btnBackMenu'), callback_data: 'menu:main' }]
+  ]
+  await sendOrEditPhotoMessage(token, chatId, logoUrl, text, { inline_keyboard: inlineKeyboard }, messageId)
+}
+
 async function showPaymentMenu(
   token: string,
   chatId: number,
@@ -1390,10 +1479,26 @@ async function showPaymentMenu(
     return
   }
 
-  const text = getT(lang, 'paymentTitle', {
-    tableName,
-    total: Number(bill.total_amount).toFixed(2)
-  })
+  // Adisyon kalemleri
+  const { data: orders } = await supabase
+    .from('orders')
+    .select('order_items(quantity, products(name_tr, name_en, base_price))')
+    .eq('table_id', tableId)
+    .neq('status', 'cancelled')
+
+  let itemsText = ''
+  if (orders) {
+    orders.forEach((o: any) => {
+      o.order_items?.forEach((item: any) => {
+        const name = item.products?.[`name_${lang}`] || item.products?.name_tr || 'Ürün'
+        const lineTotal = (item.quantity * Number(item.products?.base_price || 0)).toFixed(2)
+        itemsText += `• ${item.quantity}x <b>${escapeHtml(name)}</b> — ${lineTotal} ${currency}\n`
+      })
+    })
+  }
+
+  const totalStr = Number(bill.total_amount).toFixed(2)
+  const text = `🧾 <b>${escapeHtml(tableName)}</b>\n━━━━━━━━━━━━━━━━━\n${itemsText}━━━━━━━━━━━━━━━━━\n💰 <b>Toplam: ${totalStr} ${currency}</b>\n\n${lang === 'en' ? 'Select payment method:' : lang === 'ru' ? 'Выберите способ оплаты:' : lang === 'ka' ? 'გთხოვთ აირჩიოთ გადახდის მეთოდი:' : 'Ödeme yöntemini seçin:'}`
 
   const inlineKeyboard = [
     [
@@ -1448,29 +1553,43 @@ async function handlePaymentRequest(
     return
   }
 
+  // Adisyon kalemleri
+  const { data: orders } = await supabase
+    .from('orders')
+    .select('order_items(quantity, products(name_tr, base_price))')
+    .eq('table_id', session.table_id)
+    .neq('status', 'cancelled')
+
+  let itemsHtml = ''
+  if (orders) {
+    orders.forEach((o: any) => {
+      o.order_items?.forEach((item: any) => {
+        const name = item.products?.name_tr || 'Ürün'
+        const lineTotal = (item.quantity * Number(item.products?.base_price || 0)).toFixed(2)
+        itemsHtml += `  • ${item.quantity}x ${escapeHtml(name)} — ${lineTotal} ${currency}\n`
+      })
+    })
+  }
+
   const branchName = session.tables?.branches?.name || 'Gusto Lounge'
   const tableName = session.tables?.name || 'Masa'
   const customerName = session.customer_name || 'Müşteri'
 
   const alertMessage = `💵 <b>HESAP ÖDEME TALEBİ!</b>
 ━━━━━━━━━━━━━━━━━
-🏢 <b>Şube:</b> ${escapeHtml(branchName)}
-🎯 <b>Masa:</b> ${escapeHtml(tableName)}
-👤 <b>Müşteri:</b> ${escapeHtml(customerName)}
-💳 <b>Ödeme:</b> ${method === 'cash' ? '💵 Nakit' : '💳 Kredi Kartı'}
-💰 <b>Toplam Tutar:</b> <b>${Number(bill.total_amount).toFixed(2)} ${currency}</b>`
+🏢 ${escapeHtml(branchName)} | 🎯 ${escapeHtml(tableName)} | 👤 ${escapeHtml(customerName)}
+━━━━━━━━━━━━━━━━━
+${itemsHtml}━━━━━━━━━━━━━━━━━
+💰 <b>Toplam: ${Number(bill.total_amount).toFixed(2)} ${currency}</b>
+💳 <b>Ödeme: ${method === 'cash' ? '💵 Nakit' : '💳 Kredi Kartı'}${method === 'card' ? ' — POS getiriniz' : ''}</b>`
 
   // Zone routing
-  let payZoneChatId: string | undefined
-  if (session.table_id) {
-    const { data: tableRow } = await supabaseClient()
-      .from('tables')
-      .select('zone_id, zones(telegram_chat_id)')
-      .eq('id', session.table_id)
-      .maybeSingle()
-    const zoneChat = (tableRow?.zones as any)?.telegram_chat_id
-    if (zoneChat) payZoneChatId = zoneChat
-  }
+  const { data: tableRow } = await supabaseClient()
+    .from('tables')
+    .select('zone_id, zones(telegram_chat_id)')
+    .eq('id', session.table_id)
+    .maybeSingle()
+  const payZoneChatId = (tableRow?.zones as any)?.telegram_chat_id as string | undefined
 
   const { sendTelegramNotification } = await import('@/lib/telegram')
   await sendTelegramNotification(alertMessage, payZoneChatId)
