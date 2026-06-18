@@ -553,6 +553,8 @@ export async function POST(request: Request) {
           id,
           name,
           branch_id,
+          zone_id,
+          zones ( telegram_chat_id ),
           branches (
             name,
             currency,
@@ -635,6 +637,18 @@ export async function POST(request: Request) {
         .from('tables')
         .update({ status: 'occupied' })
         .eq('id', tableData.id)
+
+      // Zone bildirimi — yeni müşteri geldi
+      const zoneChatId = (tableData.zones as any)?.telegram_chat_id
+      if (zoneChatId) {
+        const customerFirstName = message.from?.first_name || 'Müşteri'
+        const isNewSession = !existingSession
+        const notifMsg = isNewSession
+          ? `🙋 <b>${escapeHtml(tableName)}</b> — Yeni müşteri geldi\n👤 ${escapeHtml(customerFirstName)}`
+          : `🔄 <b>${escapeHtml(tableName)}</b> — Müşteri masaya geçti\n👤 ${escapeHtml(customerFirstName)}`
+        const { sendTelegramNotification } = await import('@/lib/telegram')
+        sendTelegramNotification(notifMsg, zoneChatId).catch(() => {})
+      }
 
       // Send greeting cover photo with language selection
       const welcomeText = getT('tr', 'welcome', { branchName, tableName }) + '\n\n' + getT('tr', 'selectLanguage')
