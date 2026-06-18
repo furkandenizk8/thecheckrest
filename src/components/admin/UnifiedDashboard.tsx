@@ -12,6 +12,7 @@ import {
   acknowledgeServiceRequestAction,
   completeServiceRequestAction,
   resetTableAction,
+  updateTableStatusAction,
   payBillAction
 } from '@/app/actions/admin'
 import {
@@ -31,6 +32,9 @@ import {
   Settings,
   UtensilsCrossed,
   Layers,
+  Sparkles,
+  RotateCcw,
+  Receipt,
 } from 'lucide-react'
 
 interface UnifiedDashboardProps {
@@ -396,22 +400,36 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
                     <h2 className="text-lg font-bold text-zinc-100">Masa Haritası</h2>
                     <p className="text-xs text-zinc-500">Masa durumlarını ve anlık garson çağrılarını takip edin</p>
                   </div>
+
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {data.tables.map(table => {
                       const tableBill = data.openBills.find(b => b.table_id === table.id)
+                      const tableSessions = data.activeSessions.filter(s => s.table_id === table.id)
                       const isSelected = selectedTableId === table.id
+                      const firstSession = tableSessions[0]
+                      const isTelegram = firstSession?.device_id?.startsWith('tg_')
                       return (
                         <button
                           key={table.id}
-                          onClick={() => setSelectedTableId(table.id)}
-                          className={`flex flex-col justify-between p-4 h-32 rounded-3xl border transition duration-300 text-left relative overflow-hidden group ${
+                          onClick={() => setSelectedTableId(isSelected ? null : table.id)}
+                          className={`flex flex-col justify-between p-4 h-36 rounded-3xl border transition duration-300 text-left relative overflow-hidden group ${
                             isSelected ? 'ring-2 ring-amber-500 border-amber-500 bg-zinc-900/80 shadow-lg' : getTableColor(table)
                           }`}
                         >
                           <div className="absolute top-0 right-0 w-16 h-16 bg-white/2 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
                           <div>
-                            <div className="text-xs font-black text-white group-hover:text-amber-400 transition-colors">{table.name}</div>
-                            <div className="text-[10px] text-zinc-500 font-semibold mt-0.5">Kapasite: {table.capacity}</div>
+                            <div className="text-xs font-black text-white group-hover:text-amber-400 transition-colors flex items-center gap-1.5">
+                              {table.name}
+                              {isTelegram && <span className="text-[9px] text-sky-400 font-bold">TG</span>}
+                            </div>
+                            {firstSession ? (
+                              <div className="text-[10px] text-zinc-300 font-semibold mt-0.5 truncate max-w-[90px]">
+                                {firstSession.customer_name}
+                                {tableSessions.length > 1 && <span className="text-zinc-500"> +{tableSessions.length - 1}</span>}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-zinc-500 font-semibold mt-0.5">Kapasite: {table.capacity}</div>
+                            )}
                           </div>
                           <div>
                             {tableBill && (
@@ -423,6 +441,74 @@ export default function UnifiedDashboard({ defaultTab = 'tables' }: UnifiedDashb
                       )
                     })}
                   </div>
+
+                  {/* Quick Actions — seçili masa */}
+                  {selectedTableId && (() => {
+                    const t = data.tables.find(t => t.id === selectedTableId)
+                    if (!t) return null
+                    const bill = data.openBills.find(b => b.table_id === t.id)
+                    const sessions = data.activeSessions.filter(s => s.table_id === t.id)
+                    return (
+                      <div className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-black text-zinc-100">{t.name}</div>
+                            <div className="text-[10px] text-zinc-500 font-medium mt-0.5">
+                              {sessions.length > 0
+                                ? sessions.map(s => s.customer_name).join(', ')
+                                : 'Boş masa'}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setSelectedTableId(null)}
+                            className="p-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {bill && (
+                            <button
+                              onClick={() => { setActiveTab('cashier'); }}
+                              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition active:scale-[0.97]"
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                              Hesap Al — {Number(bill.total_amount).toFixed(2)} GEL
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setActiveTab('kitchen')}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold hover:bg-orange-500/20 transition active:scale-[0.97]"
+                          >
+                            <ChefHat className="w-3.5 h-3.5" />
+                            Mutfak Durumu
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`"${t.name}" masasını sıfırlamak istediğinize emin misiniz?`)) return
+                              const res = await resetTableAction(t.id)
+                              if (res.success) { setSelectedTableId(null); loadDashboardData(true) }
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold hover:bg-rose-500/20 transition active:scale-[0.97]"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Masayı Sıfırla
+                          </button>
+                          <button
+                            onClick={async () => {
+                              await updateTableStatusAction(t.id, 'available')
+                              loadDashboardData(false)
+                            }}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-bold hover:bg-sky-500/20 transition active:scale-[0.97]"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Temizlendi
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
 

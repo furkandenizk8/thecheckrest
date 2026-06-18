@@ -501,6 +501,17 @@ export async function resetTableAction(tableId: string) {
   return { success: true }
 }
 
+export async function updateTableStatusAction(tableId: string, status: 'empty' | 'occupied' | 'needs_cleaning' | 'available') {
+  await verifyAdminOrStaff()
+  const supabase = createServiceClient()
+  const { error } = await supabase
+    .from('tables')
+    .update({ status: status === 'available' ? 'empty' : status })
+    .eq('id', tableId)
+  if (error) return { success: false, error: error.message }
+  return { success: true }
+}
+
 export async function payBillAction(billId: string, amount: number, method: 'cash' | 'card') {
   await verifyAdminOrStaff()
   const supabase = createServiceClient()
